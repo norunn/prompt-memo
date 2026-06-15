@@ -491,6 +491,95 @@ main {
 }
 .split-info.has-split { color: var(--accent-dark); font-weight: 500; }
 
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 0 4px;
+  font-size: 13px;
+  color: var(--text-sub);
+  flex-wrap: wrap;
+  overflow-x: auto;
+}
+.breadcrumb-item {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-sub);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.breadcrumb-item:active { background: var(--accent-soft); }
+.breadcrumb-item.current {
+  color: var(--accent-dark);
+  font-weight: 600;
+  cursor: default;
+}
+.breadcrumb-item.current:active { background: none; }
+.breadcrumb-sep {
+  color: var(--text-sub);
+  opacity: 0.5;
+  font-size: 12px;
+}
+.section-label {
+  font-size: 11px;
+  color: var(--text-sub);
+  margin: 14px 4px 6px;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+.section-label:first-child { margin-top: 4px; }
+
+.folder-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: transform 0.15s;
+  border: 2px solid transparent;
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.folder-card:active { transform: scale(0.985); }
+.folder-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.folder-info { flex: 1; min-width: 0; }
+.folder-name {
+  font-family: 'Klee One', cursive;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.folder-count {
+  font-size: 11px;
+  color: var(--text-sub);
+}
+.folder-arrow {
+  color: var(--text-sub);
+  opacity: 0.5;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.search-folder-tag {
+  display: inline-block;
+  background: var(--bg-soft);
+  color: var(--text-sub);
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+
 .toast {
   position: fixed;
   bottom: 96px;
@@ -546,6 +635,7 @@ let prompts = [];
 let mergeMode = false;
 let mergeSelected = [];
 let mergeSepKey = 'rule';
+let currentPath = ''; // 現在表示中のフォルダパス（ルートは空文字）
 
 // ---------- ストレージ（環境自動判定） ----------
 // アーティファクト環境では window.storage、本番(GitHub Pages等)では localStorage を使う
@@ -632,59 +722,207 @@ function render() {
   const q = document.getElementById('search').value.toLowerCase().trim();
   const list = document.getElementById('list');
   const count = document.getElementById('count');
+  list.innerHTML = '';
 
-  let filtered = prompts;
+  // 検索モード：全体から検索、フォルダ階層は無視
   if (q) {
-    filtered = prompts.filter(p =>
+    const filtered = prompts.filter(p =>
       (p.title || '').toLowerCase().includes(q) ||
       (p.body || '').toLowerCase().includes(q) ||
       (p.tags || []).some(t => t.toLowerCase().includes(q))
-    );
-  }
-  filtered = [...filtered].sort((a, b) => b.updatedAt - a.updatedAt);
+    ).sort((a, b) => b.updatedAt - a.updatedAt);
 
-  count.textContent = prompts.length === filtered.length
-    ? `${prompts.length}件`
-    : `${filtered.length}件 / 全${prompts.length}件`;
+    count.textContent = `${filtered.length}件 / 全${prompts.length}件`;
 
-  if (filtered.length === 0) {
-    list.innerHTML = `
-      <div class="empty">
+    const bc = renderBreadcrumb(true);
+    if (bc) list.appendChild(bc);
+
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.innerHTML = `
         <div class="empty-icon">📝</div>
-        <div class="empty-text">${q ? '見つかりませんでした' : 'まだプロンプトがありません'}</div>
-        ${!q ? '<div class="empty-sub">右下の＋から追加</div>' : ''}
-      </div>`;
+        <div class="empty-text">見つかりませんでした</div>`;
+      list.appendChild(empty);
+      return;
+    }
+    filtered.forEach(p => list.appendChild(renderPromptCard(p, true)));
     return;
   }
 
-  list.innerHTML = filtered.map(p => {
-    const selIdx = mergeSelected.indexOf(p.id);
-    const selectedBadge = selIdx >= 0 ? `<div class="select-num">${selIdx + 1}</div>` : '';
-    const tagsHtml = (p.tags && p.tags.length)
-      ? `<div class="prompt-tags">${p.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>`
-      : '';
-    const preview = (p.body || '').replace(/\s+/g, ' ').slice(0, 80);
-    const histInfo = p.history && p.history.length ? `📚 ${p.history.length}版` : '';
-    return `
-      <div class="prompt-card ${selIdx >= 0 ? 'selected' : ''}" data-id="${escapeHtml(p.id)}">
-        ${selectedBadge}
-        <div class="prompt-title">${escapeHtml(p.title || '(無題)')}</div>
-        ${tagsHtml}
-        <div class="prompt-preview">${escapeHtml(preview)}</div>
-        <div class="prompt-meta">
-          <span>${histInfo}</span>
-          <span>${fmtDate(p.updatedAt)}</span>
-        </div>
-      </div>`;
-  }).join('');
+  // 通常モード：currentPath のサブフォルダ + プロンプト
+  const bc = renderBreadcrumb(false);
+  if (bc) list.appendChild(bc);
 
-  list.querySelectorAll('.prompt-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const id = card.dataset.id;
-      if (mergeMode) toggleMergeSelect(id);
-      else openDetail(id);
-    });
+  const subFolders = getSubFolders(currentPath);
+  const directPrompts = prompts
+    .filter(p => (p.folder || '') === currentPath)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+
+  // 合計件数表示
+  const totalInScope = prompts.filter(p => {
+    const f = p.folder || '';
+    return currentPath === '' ? true : (f === currentPath || f.startsWith(currentPath + '/'));
+  }).length;
+  count.textContent = currentPath ? `${totalInScope}件` : `${prompts.length}件`;
+
+  // 空チェック
+  if (subFolders.length === 0 && directPrompts.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.innerHTML = `
+      <div class="empty-icon">📝</div>
+      <div class="empty-text">${currentPath ? 'このフォルダは空です' : 'まだプロンプトがありません'}</div>
+      <div class="empty-sub">右下の＋から追加</div>`;
+    list.appendChild(empty);
+    return;
+  }
+
+  // フォルダセクション
+  if (subFolders.length > 0) {
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = 'フォルダ';
+    list.appendChild(label);
+    subFolders.forEach(name => list.appendChild(renderFolderCard(name)));
+  }
+
+  // プロンプトセクション
+  if (directPrompts.length > 0) {
+    if (subFolders.length > 0) {
+      const label = document.createElement('div');
+      label.className = 'section-label';
+      label.textContent = 'プロンプト';
+      list.appendChild(label);
+    }
+    directPrompts.forEach(p => list.appendChild(renderPromptCard(p, false)));
+  }
+}
+
+function renderBreadcrumb(isSearch) {
+  if (!currentPath && !isSearch) return null;
+  const bc = document.createElement('div');
+  bc.className = 'breadcrumb';
+
+  if (isSearch) {
+    const item = document.createElement('span');
+    item.className = 'breadcrumb-item current';
+    item.textContent = '🔍 検索結果';
+    bc.appendChild(item);
+    if (currentPath) {
+      const sub = document.createElement('span');
+      sub.className = 'breadcrumb-sep';
+      sub.textContent = `（${currentPath} 含む全体から）`;
+      sub.style.fontSize = '11px';
+      bc.appendChild(sub);
+    }
+    return bc;
+  }
+
+  const home = document.createElement('button');
+  home.className = 'breadcrumb-item';
+  home.textContent = '🏠 ホーム';
+  home.addEventListener('click', () => navigateTo(''));
+  bc.appendChild(home);
+
+  const parts = currentPath.split('/');
+  let pathSoFar = '';
+  parts.forEach((part, i) => {
+    pathSoFar = pathSoFar ? `${pathSoFar}/${part}` : part;
+    const sep = document.createElement('span');
+    sep.className = 'breadcrumb-sep';
+    sep.textContent = '›';
+    bc.appendChild(sep);
+
+    const isLast = i === parts.length - 1;
+    const btn = document.createElement('button');
+    btn.className = 'breadcrumb-item' + (isLast ? ' current' : '');
+    btn.textContent = part;
+    if (!isLast) {
+      const nav = pathSoFar;
+      btn.addEventListener('click', () => navigateTo(nav));
+    }
+    bc.appendChild(btn);
   });
+  return bc;
+}
+
+function getSubFolders(path) {
+  const set = new Set();
+  prompts.forEach(p => {
+    const folder = p.folder || '';
+    if (folder === path) return;
+    if (path === '') {
+      const first = folder.split('/')[0];
+      if (first) set.add(first);
+    } else if (folder.startsWith(path + '/')) {
+      const rest = folder.slice(path.length + 1);
+      const first = rest.split('/')[0];
+      if (first) set.add(first);
+    }
+  });
+  return [...set].sort((a, b) => a.localeCompare(b, 'ja'));
+}
+
+function navigateTo(path) {
+  currentPath = path;
+  document.getElementById('search').value = '';
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderFolderCard(folderName) {
+  const folderPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+  const count = prompts.filter(p => {
+    const f = p.folder || '';
+    return f === folderPath || f.startsWith(folderPath + '/');
+  }).length;
+
+  const card = document.createElement('div');
+  card.className = 'folder-card';
+  card.innerHTML = `
+    <div class="folder-icon">📁</div>
+    <div class="folder-info">
+      <div class="folder-name">${escapeHtml(folderName)}</div>
+      <div class="folder-count">${count}件</div>
+    </div>
+    <div class="folder-arrow">›</div>`;
+  card.addEventListener('click', () => navigateTo(folderPath));
+  return card;
+}
+
+function renderPromptCard(p, showFolder) {
+  const card = document.createElement('div');
+  const selIdx = mergeSelected.indexOf(p.id);
+  card.className = 'prompt-card' + (selIdx >= 0 ? ' selected' : '');
+  card.dataset.id = p.id;
+
+  const selectedBadge = selIdx >= 0 ? `<div class="select-num">${selIdx + 1}</div>` : '';
+  const tagsHtml = (p.tags && p.tags.length)
+    ? `<div class="prompt-tags">${p.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>`
+    : '';
+  const folderTag = (showFolder && p.folder)
+    ? `<div class="search-folder-tag">📁 ${escapeHtml(p.folder)}</div>`
+    : '';
+  const preview = (p.body || '').replace(/\s+/g, ' ').slice(0, 80);
+  const histInfo = p.history && p.history.length ? `📚 ${p.history.length}版` : '';
+
+  card.innerHTML = `
+    ${selectedBadge}
+    ${folderTag}
+    <div class="prompt-title">${escapeHtml(p.title || '(無題)')}</div>
+    ${tagsHtml}
+    <div class="prompt-preview">${escapeHtml(preview)}</div>
+    <div class="prompt-meta">
+      <span>${histInfo}</span>
+      <span>${fmtDate(p.updatedAt)}</span>
+    </div>`;
+
+  card.addEventListener('click', () => {
+    if (mergeMode) toggleMergeSelect(p.id);
+    else openDetail(p.id);
+  });
+  return card;
 }
 
 // ---------- モーダル ----------
@@ -704,6 +942,9 @@ function openDetail(id) {
   const tagsHtml = (p.tags && p.tags.length)
     ? `<div class="detail-tags">${p.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>`
     : '';
+  const folderHtml = p.folder
+    ? `<div class="search-folder-tag">📁 ${escapeHtml(p.folder)}</div>`
+    : '';
   const hasHistory = p.history && p.history.length;
 
   openModal(`
@@ -712,6 +953,7 @@ function openDetail(id) {
       <button class="modal-close" data-action="close">×</button>
     </div>
     <div class="modal-body">
+      ${folderHtml}
       ${tagsHtml}
       <div class="detail-body">${escapeHtml(p.body)}</div>
       <div class="detail-meta">
@@ -776,6 +1018,7 @@ async function deletePrompt(id) {
 function openEdit(id) {
   const p = id ? prompts.find(x => x.id === id) : null;
   const isNew = !p;
+  const defaultFolder = isNew ? currentPath : (p.folder || '');
 
   openModal(`
     <div class="modal-header">
@@ -788,8 +1031,12 @@ function openEdit(id) {
         <input type="text" class="form-input" id="editTitle" value="${escapeHtml(p ? p.title : '')}" placeholder="タイトル">
       </div>
       <div class="form-field">
+        <label class="form-label">フォルダ（／で区切ると階層になる、空欄はホーム）</label>
+        <input type="text" class="form-input" id="editFolder" value="${escapeHtml(defaultFolder)}" placeholder="例: ルルイエ/キャラ">
+      </div>
+      <div class="form-field">
         <label class="form-label">タグ（カンマ区切り）</label>
-        <input type="text" class="form-input" id="editTags" value="${escapeHtml(p ? (p.tags || []).join(', ') : '')}" placeholder="例: キャラ, システム, 創作">
+        <input type="text" class="form-input" id="editTags" value="${escapeHtml(p ? (p.tags || []).join(', ') : '')}" placeholder="例: 設定, システム">
       </div>
       <div class="form-field">
         <label class="form-label">本文</label>
@@ -813,9 +1060,19 @@ function openEdit(id) {
   setTimeout(() => document.getElementById('editTitle').focus(), 100);
 }
 
+function normalizeFolder(raw) {
+  // 前後の空白を取り、連続するスラッシュを1つに、前後のスラッシュを削る
+  return (raw || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/\/+/g, '/')
+    .replace(/^\/+|\/+$/g, '');
+}
+
 async function savePrompt(id) {
   const title = document.getElementById('editTitle').value.trim();
   const body = document.getElementById('editBody').value;
+  const folder = normalizeFolder(document.getElementById('editFolder').value);
   const tags = document.getElementById('editTags').value
     .split(',').map(t => t.trim()).filter(t => t);
 
@@ -830,22 +1087,24 @@ async function savePrompt(id) {
     const p = prompts.find(x => x.id === id);
     if (p) {
       const changed = p.title !== title || p.body !== body
-        || JSON.stringify(p.tags || []) !== JSON.stringify(tags);
+        || JSON.stringify(p.tags || []) !== JSON.stringify(tags)
+        || (p.folder || '') !== folder;
       if (changed) {
         if (!p.history) p.history = [];
         p.history.unshift({
-          title: p.title, body: p.body, tags: p.tags, savedAt: p.updatedAt
+          title: p.title, body: p.body, tags: p.tags, folder: p.folder, savedAt: p.updatedAt
         });
         if (p.history.length > HISTORY_LIMIT) p.history = p.history.slice(0, HISTORY_LIMIT);
       }
       p.title = title;
       p.body = body;
       p.tags = tags;
+      p.folder = folder;
       p.updatedAt = now;
     }
   } else {
     prompts.push({
-      id: uid(), title, body, tags,
+      id: uid(), title, body, tags, folder,
       createdAt: now, updatedAt: now, history: []
     });
   }
@@ -895,12 +1154,13 @@ async function restoreHistory(id, idx) {
   const h = p.history[idx];
   // 現在を履歴の先頭に
   p.history.unshift({
-    title: p.title, body: p.body, tags: p.tags, savedAt: p.updatedAt
+    title: p.title, body: p.body, tags: p.tags, folder: p.folder, savedAt: p.updatedAt
   });
   // 選んだ版を本体に
   p.title = h.title;
   p.body = h.body;
   p.tags = h.tags;
+  if (h.folder !== undefined) p.folder = h.folder; // 古い履歴にはfolderが無いかも
   p.updatedAt = Date.now();
   // 戻した版を履歴から消す（unshiftで1つズレてるので idx+1）
   p.history.splice(idx + 1, 1);
@@ -1009,8 +1269,13 @@ async function saveMerged(selected) {
   const body = buildMerged(selected);
   const title = '合体: ' + selected.map(p => p.title || '(無題)').join(' + ').slice(0, 50);
   const now = Date.now();
+
+  // 全選択が同じフォルダなら、そのフォルダ。違うなら、現在のパス。
+  const folders = new Set(selected.map(p => p.folder || ''));
+  const folder = folders.size === 1 ? [...folders][0] : currentPath;
+
   prompts.push({
-    id: uid(), title, body, tags: ['合体'],
+    id: uid(), title, body, tags: ['合体'], folder,
     createdAt: now, updatedAt: now, history: []
   });
   await savePrompts();
@@ -1119,6 +1384,7 @@ async function performSplit(id, lines, splitIndices, keepOriginal) {
   const now = Date.now();
   const baseTitle = p.title || '(無題)';
   const baseTags = [...(p.tags || [])];
+  const baseFolder = p.folder || '';
 
   // 各チャンクを新規プロンプトとして保存
   chunks.forEach((body, i) => {
@@ -1127,6 +1393,7 @@ async function performSplit(id, lines, splitIndices, keepOriginal) {
       title: `${baseTitle} (${i + 1})`,
       body: body.replace(/^\n+|\n+$/g, ''), // 前後の改行だけ削る
       tags: [...baseTags],
+      folder: baseFolder,
       createdAt: now,
       updatedAt: now,
       history: []
