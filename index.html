@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ことのはノート</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #FAF5ED;
+  --bg-soft: #F2EBDC;
+  --card: #FFFFFF;
+  --text: #2C2820;
+  --text-sub: #847B6C;
+  --accent: #6B8E5A;
+  --accent-soft: #D4DFC9;
+  --accent-dark: #4A6A3E;
+  --border: #E8DFCC;
+  --danger: #B05E54;
+  --shadow: 0 2px 10px rgba(80, 62, 30, 0.06);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: 'Zen Maru Gothic', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  padding-bottom: 90px;
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(212, 223, 201, 0.15), transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(232, 223, 204, 0.3), transparent 40%);
+  min-height: 100vh;
+}
+header {
+  padding: 18px 16px 12px;
+  position: sticky;
+  top: 0;
+  background: rgba(250, 245, 237, 0.92);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+  border-bottom: 1px solid var(--border);
+}
+.app-title {
+  font-family: 'Klee One', cursive;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--accent-dark);
+  margin-bottom: 10px;
+  letter-spacing: 0.02em;
+}
+.search-bar {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  transition: border-color 0.2s;
+}
+.search-bar:focus { outline: none; border-color: var(--accent); }
+.search-bar::placeholder { color: var(--text-sub); }
+main {
+  padding: 14px 16px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.list-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+.merge-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.merge-toggle.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.prompt-list { display: flex; flex-direction: column; gap: 10px; }
+.prompt-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  border: 2px solid transparent;
+  box-shadow: var(--shadow);
+  position: relative;
+}
+.prompt-card:active { transform: scale(0.985); }
+.prompt-card.selected {
+  border-color: var(--accent);
+  background: #FBFCF7;
+}
+.select-num {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+.prompt-title {
+  font-family: 'Klee One', cursive;
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text);
+  padding-right: 30px;
+}
+.prompt-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.tag {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+.prompt-preview {
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.prompt-meta {
+  font-size: 11px;
+  color: var(--text-sub);
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-sub);
+}
+.empty-icon { font-size: 44px; margin-bottom: 12px; opacity: 0.5; }
+.empty-text { font-size: 14px; }
+.empty-sub { font-size: 12px; margin-top: 6px; opacity: 0.8; }
+
+.fab {
+  position: fixed;
+  bottom: 22px;
+  right: 22px;
+  min-width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 14px rgba(107, 142, 90, 0.35);
+  font-size: 28px;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+  z-index: 5;
+  padding: 0 18px;
+}
+.fab:active { transform: scale(0.95); }
+.fab.merge-fab { font-size: 14px; font-weight: 600; }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(40, 30, 18, 0.45);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-overlay.active { display: flex; animation: fadeIn 0.18s ease-out; }
+.modal {
+  background: var(--bg);
+  border-radius: 16px 16px 0 0;
+  width: 100%;
+  max-width: 640px;
+  max-height: 92vh;
+  overflow-y: auto;
+  animation: slideUp 0.22s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+@media (min-width: 600px) {
+  .modal-overlay { align-items: center; }
+  .modal { border-radius: 16px; max-height: 86vh; }
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.modal-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+.modal-title {
+  font-family: 'Klee One', cursive;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--accent-dark);
+  flex: 1;
+  margin-right: 10px;
+  word-break: break-word;
+}
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 26px;
+  color: var(--text-sub);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.modal-body { padding: 14px 16px; flex: 1; }
+.form-field { margin-bottom: 14px; }
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-sub);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+.form-input, .form-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  transition: border-color 0.2s;
+}
+.form-input:focus, .form-textarea:focus { outline: none; border-color: var(--accent); }
+.form-textarea { resize: vertical; min-height: 200px; line-height: 1.7; }
+.modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
+}
+.btn {
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:active { background: var(--accent-dark); }
+.btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+.btn-ghost { background: none; color: var(--text-sub); }
+
+.detail-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+.detail-body {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.75;
+  border: 1px solid var(--border);
+  max-height: 50vh;
+  overflow-y: auto;
+  font-family: 'Zen Maru Gothic', sans-serif;
+}
+.detail-meta {
+  font-size: 11px;
+  color: var(--text-sub);
+  margin-top: 12px;
+  line-height: 1.8;
+}
+.detail-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
+.action-btn {
+  flex: 1;
+  min-width: 80px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.action-btn:active { background: var(--accent-soft); transform: scale(0.97); }
+.action-btn.danger { color: var(--danger); }
+.action-btn.danger:active { background: #F5E3E0; }
+
+.history-item {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+}
+.history-date {
+  font-size: 11px;
+  color: var(--text-sub);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.history-preview {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  max-height: 90px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 8px;
+  background: var(--bg-soft);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.merge-selected-list {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+}
+.merge-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.merge-item:not(:last-child) { border-bottom: 1px dashed var(--border); }
+.merge-num {
+  width: 22px;
+  height: 22px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.separator-options {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.sep-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 18px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sep-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+.split-chunks {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.7;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.split-line {
+  padding: 3px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  min-height: 1em;
+}
+.split-line.blank {
+  color: var(--text-sub);
+  opacity: 0.5;
+  font-size: 11px;
+}
+.split-hotspot {
+  padding: 6px 0;
+  cursor: pointer;
+  transition: padding 0.15s;
+  margin: 0 8px;
+}
+.split-thin {
+  height: 1px;
+  background: var(--border);
+  transition: background 0.15s, height 0.15s;
+  border-radius: 1px;
+}
+.split-hotspot:active .split-thin {
+  background: var(--accent);
+  height: 2px;
+}
+.split-hotspot.active { padding: 10px 0; }
+.split-marker {
+  background: var(--accent);
+  color: white;
+  text-align: center;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.split-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text);
+}
+.split-checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.split-info {
+  font-size: 12px;
+  color: var(--text-sub);
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: var(--bg-soft);
+  border-radius: 6px;
+}
+.split-info.has-split { color: var(--accent-dark); font-weight: 500; }
+
+.toast {
+  position: fixed;
+  bottom: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent-dark);
+  color: white;
+  padding: 10px 22px;
+  border-radius: 24px;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+  z-index: 200;
+  box-shadow: 0 4px 14px rgba(74, 106, 62, 0.3);
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1 class="app-title">ことのはノート</h1>
+  <input type="search" class="search-bar" id="search" placeholder="検索（タイトル・本文・タグ）">
+</header>
+
+<main>
+  <div class="list-meta">
+    <span id="count">0件</span>
+    <button class="merge-toggle" id="mergeToggle">合体モード</button>
+  </div>
+  <div class="prompt-list" id="list"></div>
+</main>
+
+<button class="fab" id="fab">＋</button>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'prompts_v1';
+const HISTORY_LIMIT = 10;
+const SEPARATORS = [
+  { key: 'blank', label: '空行', value: '\n\n' },
+  { key: 'rule',  label: '罫線', value: '\n\n---\n\n' },
+  { key: 'head',  label: '見出し', value: 'HEADING' },
+  { key: 'nl',    label: 'なし', value: '\n' },
+];
+
+let prompts = [];
+let mergeMode = false;
+let mergeSelected = [];
+let mergeSepKey = 'rule';
+
+// ---------- ストレージ（環境自動判定） ----------
+// アーティファクト環境では window.storage、本番(GitHub Pages等)では localStorage を使う
+const storage = (() => {
+  if (typeof window.storage !== 'undefined' && typeof window.storage.get === 'function') {
+    return {
+      mode: 'artifact',
+      get: async (key) => {
+        try {
+          const r = await window.storage.get(key);
+          return r && r.value ? r.value : null;
+        } catch (e) { return null; }
+      },
+      set: async (key, value) => {
+        await window.storage.set(key, value);
+      }
+    };
+  }
+  return {
+    mode: 'local',
+    get: async (key) => {
+      try { return localStorage.getItem(key); }
+      catch (e) { return null; }
+    },
+    set: async (key, value) => {
+      try { localStorage.setItem(key, value); }
+      catch (e) { console.error('保存失敗', e); throw e; }
+    }
+  };
+})();
+
+// ---------- 保存 ----------
+async function loadPrompts() {
+  try {
+    const value = await storage.get(STORAGE_KEY);
+    if (value) prompts = JSON.parse(value);
+  } catch (e) {
+    prompts = [];
+  }
+}
+async function savePrompts() {
+  try {
+    await storage.set(STORAGE_KEY, JSON.stringify(prompts));
+  } catch (e) {
+    console.error('保存失敗', e);
+    toast('保存に失敗しました');
+  }
+}
+
+// ---------- ユーティリティ ----------
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+function fmtDate(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) {
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+  if (d.getFullYear() === now.getFullYear()) {
+    return `${d.getMonth()+1}/${d.getDate()}`;
+  }
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+}
+function fmtFullDate(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ---------- 一覧描画 ----------
+function render() {
+  const q = document.getElementById('search').value.toLowerCase().trim();
+  const list = document.getElementById('list');
+  const count = document.getElementById('count');
+
+  let filtered = prompts;
+  if (q) {
+    filtered = prompts.filter(p =>
+      (p.title || '').toLowerCase().includes(q) ||
+      (p.body || '').toLowerCase().includes(q) ||
+      (p.tags || []).some(t => t.toLowerCase().includes(q))
+    );
+  }
+  filtered = [...filtered].sort((a, b) => b.updatedAt - a.updatedAt);
+
+  count.textContent = prompts.length === filtered.length
+    ? `${prompts.length}件`
+    : `${filtered.length}件 / 全${prompts.length}件`;
+
+  if (filtered.length === 0) {
+    list.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">📝</div>
+        <div class="empty-text">${q ? '見つかりませんでした' : 'まだプロンプトがありません'}</div>
+        ${!q ? '<div class="empty-sub">右下の＋から追加</div>' : ''}
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(p => {
+    const selIdx = mergeSelected.indexOf(p.id);
+    const selectedBadge = selIdx >= 0 ? `<div class="select-num">${selIdx + 1}</div>` : '';
+    const tagsHtml = (p.tags && p.tags.length)
+      ? `<div class="prompt-tags">${p.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>`
+      : '';
+    const preview = (p.body || '').replace(/\s+/g, ' ').slice(0, 80);
+    const histInfo = p.history && p.history.length ? `📚 ${p.history.length}版` : '';
+    return `
+      <div class="prompt-card ${selIdx >= 0 ? 'selected' : ''}" data-id="${escapeHtml(p.id)}">
+        ${selectedBadge}
+        <div class="prompt-title">${escapeHtml(p.title || '(無題)')}</div>
+        ${tagsHtml}
+        <div class="prompt-preview">${escapeHtml(preview)}</div>
+        <div class="prompt-meta">
+          <span>${histInfo}</span>
+          <span>${fmtDate(p.updatedAt)}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  list.querySelectorAll('.prompt-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = card.dataset.id;
+      if (mergeMode) toggleMergeSelect(id);
+      else openDetail(id);
+    });
+  });
+}
+
+// ---------- モーダル ----------
+function openModal(html) {
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modal').classList.add('active');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+}
+
+// ---------- 詳細 ----------
+function openDetail(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+
+  const tagsHtml = (p.tags && p.tags.length)
+    ? `<div class="detail-tags">${p.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>`
+    : '';
+  const hasHistory = p.history && p.history.length;
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${escapeHtml(p.title || '(無題)')}</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      ${tagsHtml}
+      <div class="detail-body">${escapeHtml(p.body)}</div>
+      <div class="detail-meta">
+        作成: ${fmtFullDate(p.createdAt)}<br>
+        更新: ${fmtFullDate(p.updatedAt)}
+        ${hasHistory ? `<br>履歴: ${p.history.length}版` : ''}
+      </div>
+      <div class="detail-actions">
+        <button class="action-btn" data-action="copy">📋 コピー</button>
+        <button class="action-btn" data-action="edit">✏️ 編集</button>
+        <button class="action-btn" data-action="split">✂️ 分割</button>
+        ${hasHistory ? `<button class="action-btn" data-action="history">📚 履歴</button>` : ''}
+        <button class="action-btn danger" data-action="delete">🗑 削除</button>
+      </div>
+    </div>
+  `);
+
+  document.getElementById('modalContent').querySelectorAll('[data-action]').forEach(b => {
+    b.addEventListener('click', () => {
+      const a = b.dataset.action;
+      if (a === 'close') closeModal();
+      else if (a === 'copy') copyPrompt(id);
+      else if (a === 'edit') openEdit(id);
+      else if (a === 'split') openSplit(id);
+      else if (a === 'history') openHistory(id);
+      else if (a === 'delete') deletePrompt(id);
+    });
+  });
+}
+
+async function copyPrompt(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+  try {
+    await navigator.clipboard.writeText(p.body || '');
+    toast('コピーしました');
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = p.body || '';
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast('コピーしました'); }
+    catch { toast('コピーできませんでした'); }
+    document.body.removeChild(ta);
+  }
+}
+
+async function deletePrompt(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`「${p.title || '(無題)'}」を削除しますか？\n（履歴も一緒に消えます）`)) return;
+  prompts = prompts.filter(x => x.id !== id);
+  await savePrompts();
+  closeModal();
+  render();
+  toast('削除しました');
+}
+
+// ---------- 編集 ----------
+function openEdit(id) {
+  const p = id ? prompts.find(x => x.id === id) : null;
+  const isNew = !p;
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">${isNew ? '新規プロンプト' : '編集'}</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field">
+        <label class="form-label">タイトル</label>
+        <input type="text" class="form-input" id="editTitle" value="${escapeHtml(p ? p.title : '')}" placeholder="タイトル">
+      </div>
+      <div class="form-field">
+        <label class="form-label">タグ（カンマ区切り）</label>
+        <input type="text" class="form-input" id="editTags" value="${escapeHtml(p ? (p.tags || []).join(', ') : '')}" placeholder="例: キャラ, システム, 創作">
+      </div>
+      <div class="form-field">
+        <label class="form-label">本文</label>
+        <textarea class="form-textarea" id="editBody" placeholder="プロンプト本文">${escapeHtml(p ? p.body : '')}</textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+      <button class="btn btn-primary" data-action="save">保存</button>
+    </div>
+  `);
+
+  document.getElementById('modalContent').querySelectorAll('[data-action]').forEach(b => {
+    b.addEventListener('click', () => {
+      const a = b.dataset.action;
+      if (a === 'close') closeModal();
+      else if (a === 'save') savePrompt(id);
+    });
+  });
+
+  setTimeout(() => document.getElementById('editTitle').focus(), 100);
+}
+
+async function savePrompt(id) {
+  const title = document.getElementById('editTitle').value.trim();
+  const body = document.getElementById('editBody').value;
+  const tags = document.getElementById('editTags').value
+    .split(',').map(t => t.trim()).filter(t => t);
+
+  if (!title && !body) {
+    toast('タイトルか本文を入れてね');
+    return;
+  }
+
+  const now = Date.now();
+
+  if (id) {
+    const p = prompts.find(x => x.id === id);
+    if (p) {
+      const changed = p.title !== title || p.body !== body
+        || JSON.stringify(p.tags || []) !== JSON.stringify(tags);
+      if (changed) {
+        if (!p.history) p.history = [];
+        p.history.unshift({
+          title: p.title, body: p.body, tags: p.tags, savedAt: p.updatedAt
+        });
+        if (p.history.length > HISTORY_LIMIT) p.history = p.history.slice(0, HISTORY_LIMIT);
+      }
+      p.title = title;
+      p.body = body;
+      p.tags = tags;
+      p.updatedAt = now;
+    }
+  } else {
+    prompts.push({
+      id: uid(), title, body, tags,
+      createdAt: now, updatedAt: now, history: []
+    });
+  }
+
+  await savePrompts();
+  closeModal();
+  render();
+  toast(id ? '保存しました' : '追加しました');
+}
+
+// ---------- 履歴 ----------
+function openHistory(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p || !p.history || !p.history.length) return;
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">📚 履歴</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-sub);margin-bottom:12px;">
+        「${escapeHtml(p.title || '(無題)')}」の過去の版
+      </div>
+      ${p.history.map((h, i) => `
+        <div class="history-item">
+          <div class="history-date">${fmtFullDate(h.savedAt)} の版</div>
+          <div class="history-preview">${escapeHtml(h.body || '(本文なし)')}</div>
+          <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px;" data-restore="${i}">この版に戻す</button>
+        </div>
+      `).join('')}
+    </div>
+  `);
+
+  const root = document.getElementById('modalContent');
+  root.querySelector('[data-action="close"]').addEventListener('click', closeModal);
+  root.querySelectorAll('[data-restore]').forEach(b => {
+    b.addEventListener('click', () => restoreHistory(id, parseInt(b.dataset.restore, 10)));
+  });
+}
+
+async function restoreHistory(id, idx) {
+  const p = prompts.find(x => x.id === id);
+  if (!p || !p.history || !p.history[idx]) return;
+  if (!confirm('現在の内容を履歴に保存して、選んだ版に戻します。よろしい？')) return;
+
+  const h = p.history[idx];
+  // 現在を履歴の先頭に
+  p.history.unshift({
+    title: p.title, body: p.body, tags: p.tags, savedAt: p.updatedAt
+  });
+  // 選んだ版を本体に
+  p.title = h.title;
+  p.body = h.body;
+  p.tags = h.tags;
+  p.updatedAt = Date.now();
+  // 戻した版を履歴から消す（unshiftで1つズレてるので idx+1）
+  p.history.splice(idx + 1, 1);
+  if (p.history.length > HISTORY_LIMIT) p.history = p.history.slice(0, HISTORY_LIMIT);
+
+  await savePrompts();
+  closeModal();
+  render();
+  toast('戻しました');
+}
+
+// ---------- 合体 ----------
+function toggleMergeMode() {
+  mergeMode = !mergeMode;
+  mergeSelected = [];
+  const btn = document.getElementById('mergeToggle');
+  btn.classList.toggle('active', mergeMode);
+  btn.textContent = mergeMode ? '合体モード解除' : '合体モード';
+
+  const fab = document.getElementById('fab');
+  if (mergeMode) {
+    fab.classList.add('merge-fab');
+    fab.textContent = '合体する (0)';
+  } else {
+    fab.classList.remove('merge-fab');
+    fab.textContent = '＋';
+  }
+  render();
+}
+
+function toggleMergeSelect(id) {
+  const idx = mergeSelected.indexOf(id);
+  if (idx >= 0) mergeSelected.splice(idx, 1);
+  else mergeSelected.push(id);
+  document.getElementById('fab').textContent = `合体する (${mergeSelected.length})`;
+  render();
+}
+
+function getSeparator() {
+  return SEPARATORS.find(s => s.key === mergeSepKey) || SEPARATORS[1];
+}
+
+function buildMerged(selected) {
+  const sep = getSeparator();
+  if (sep.value === 'HEADING') {
+    return selected.map(p => `## ${p.title || '(無題)'}\n\n${p.body || ''}`).join('\n\n');
+  }
+  return selected.map(p => p.body || '').join(sep.value);
+}
+
+function openMerge() {
+  if (mergeSelected.length < 2) {
+    toast('2つ以上選んでね');
+    return;
+  }
+  const selected = mergeSelected.map(id => prompts.find(p => p.id === id)).filter(Boolean);
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">🔗 合体</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="form-label">選択順</label>
+      <div class="merge-selected-list">
+        ${selected.map((p, i) => `
+          <div class="merge-item">
+            <div class="merge-num">${i + 1}</div>
+            <div>${escapeHtml(p.title || '(無題)')}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <label class="form-label">区切り方</label>
+      <div class="separator-options" id="sepOpts"></div>
+
+      <label class="form-label">プレビュー</label>
+      <div class="detail-body" id="mergePreview">${escapeHtml(buildMerged(selected))}</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+      <button class="btn btn-primary" data-action="save">新規として保存</button>
+    </div>
+  `);
+
+  const sepOpts = document.getElementById('sepOpts');
+  SEPARATORS.forEach(s => {
+    const b = document.createElement('button');
+    b.className = 'sep-btn' + (s.key === mergeSepKey ? ' active' : '');
+    b.textContent = s.label;
+    b.addEventListener('click', () => {
+      mergeSepKey = s.key;
+      sepOpts.querySelectorAll('.sep-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      document.getElementById('mergePreview').textContent = buildMerged(selected);
+    });
+    sepOpts.appendChild(b);
+  });
+
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="save"]').addEventListener('click', () => saveMerged(selected));
+}
+
+async function saveMerged(selected) {
+  const body = buildMerged(selected);
+  const title = '合体: ' + selected.map(p => p.title || '(無題)').join(' + ').slice(0, 50);
+  const now = Date.now();
+  prompts.push({
+    id: uid(), title, body, tags: ['合体'],
+    createdAt: now, updatedAt: now, history: []
+  });
+  await savePrompts();
+  closeModal();
+  toggleMergeMode();
+  toast('合体しました');
+}
+
+// ---------- 分割 ----------
+function openSplit(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+
+  const lines = (p.body || '').split('\n');
+  let splitIndices = []; // 各要素は「この行の後で分割する」というindex
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">✂️ 分割</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-sub);margin-bottom:12px;line-height:1.6;">
+        「${escapeHtml(p.title || '(無題)')}」を分けます。<br>
+        行と行の間の細い線をタップ → そこに分割線が入る（複数OK）
+      </div>
+
+      <div id="splitChunks" class="split-chunks"></div>
+
+      <div class="split-checkbox-row">
+        <input type="checkbox" id="keepOriginal" checked>
+        <label for="keepOriginal">元のプロンプトを残す</label>
+      </div>
+
+      <div id="splitInfo" class="split-info">分割位置を選んでね</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+      <button class="btn btn-primary" data-action="execute">分割する</button>
+    </div>
+  `);
+
+  const container = document.getElementById('splitChunks');
+  function renderSplitChunks() {
+    container.innerHTML = '';
+    lines.forEach((line, i) => {
+      const lineEl = document.createElement('div');
+      const isBlank = line.trim() === '';
+      lineEl.className = 'split-line' + (isBlank ? ' blank' : '');
+      lineEl.textContent = isBlank ? '(空行)' : line;
+      container.appendChild(lineEl);
+
+      // 最後の行の後にはホットスポットなし
+      if (i < lines.length - 1) {
+        const hot = document.createElement('div');
+        const isSplit = splitIndices.includes(i);
+        hot.className = 'split-hotspot' + (isSplit ? ' active' : '');
+        hot.innerHTML = isSplit
+          ? '<div class="split-marker">✂️ ここで分割</div>'
+          : '<div class="split-thin"></div>';
+        hot.addEventListener('click', () => {
+          if (isSplit) splitIndices = splitIndices.filter(x => x !== i);
+          else { splitIndices.push(i); splitIndices.sort((a, b) => a - b); }
+          renderSplitChunks();
+        });
+        container.appendChild(hot);
+      }
+    });
+
+    const info = document.getElementById('splitInfo');
+    if (splitIndices.length === 0) {
+      info.textContent = '分割位置を選んでね';
+      info.classList.remove('has-split');
+    } else {
+      info.textContent = `${splitIndices.length + 1}個のプロンプトに分かれます`;
+      info.classList.add('has-split');
+    }
+  }
+  renderSplitChunks();
+
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="execute"]').addEventListener('click', () => {
+    if (splitIndices.length === 0) {
+      toast('分割位置を選んでね');
+      return;
+    }
+    const keepOriginal = document.getElementById('keepOriginal').checked;
+    performSplit(id, lines, splitIndices, keepOriginal);
+  });
+}
+
+async function performSplit(id, lines, splitIndices, keepOriginal) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+
+  // チャンクに分ける
+  const chunks = [];
+  let start = 0;
+  for (const idx of splitIndices) {
+    chunks.push(lines.slice(start, idx + 1).join('\n'));
+    start = idx + 1;
+  }
+  chunks.push(lines.slice(start).join('\n'));
+
+  const now = Date.now();
+  const baseTitle = p.title || '(無題)';
+  const baseTags = [...(p.tags || [])];
+
+  // 各チャンクを新規プロンプトとして保存
+  chunks.forEach((body, i) => {
+    prompts.push({
+      id: uid(),
+      title: `${baseTitle} (${i + 1})`,
+      body: body.replace(/^\n+|\n+$/g, ''), // 前後の改行だけ削る
+      tags: [...baseTags],
+      createdAt: now,
+      updatedAt: now,
+      history: []
+    });
+  });
+
+  // 元を消すかどうか
+  if (!keepOriginal) {
+    prompts = prompts.filter(x => x.id !== id);
+  }
+
+  await savePrompts();
+  closeModal();
+  render();
+  toast(`${chunks.length}個に分割しました`);
+}
+
+// ---------- 初期化 ----------
+document.getElementById('fab').addEventListener('click', () => {
+  if (mergeMode) openMerge();
+  else openEdit();
+});
+document.getElementById('mergeToggle').addEventListener('click', toggleMergeMode);
+document.getElementById('search').addEventListener('input', render);
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target.id === 'modal') closeModal();
+});
+
+loadPrompts().then(render);
+</script>
+</body>
+</html>
