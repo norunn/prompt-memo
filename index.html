@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>ことのはノート</title>
+<meta name="theme-color" content="#6B8E5A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ことのはノート">
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoi44GT44Go44Gu44Gv44OO44O844OIIiwic2hvcnRfbmFtZSI6IuOBk+OBqOOBruOBryIsInN0YXJ0X3VybCI6Ii4vIiwic2NvcGUiOiIuLyIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiNGQUY1RUQiLCJ0aGVtZV9jb2xvciI6IiM2QjhFNUEiLCJvcmllbnRhdGlvbiI6InBvcnRyYWl0IiwiZGVzY3JpcHRpb24iOiLjg5fjg63jg7Pjg5fjg4jnrqHnkIbjg47jg7zjg4giLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCNGJXeHVjejBpYUhSMGNEb3ZMM2QzZHk1M015NXZjbWN2TWpBd01DOXpkbWNpSUhacFpYZENiM2c5SWpBZ01DQTFNVElnTlRFeUlqNDhjbVZqZENCM2FXUjBhRDBpTlRFeUlpQm9aV2xuYUhROUlqVXhNaUlnWm1sc2JEMGlJMFpCUmpWRlJDSXZQangwWlhoMElIZzlJakkxTmlJZ2VUMGlNamd3SWlCbWIyNTBMV1poYldsc2VUMGljMlZ5YVdZaUlHWnZiblF0ZDJWcFoyaDBQU0ppYjJ4a0lpQm1iMjUwTFhOcGVtVTlJak13TUNJZ1ptbHNiRDBpSXpaQ09FVTFRU0lnZEdWNGRDMWhibU5vYjNJOUltMXBaR1JzWlNJZ1pHOXRhVzVoYm5RdFltRnpaV3hwYm1VOUltMXBaR1JzWlNJKzQ0R1RQQzkwWlhoMFBqd3ZjM1puUGc9PSIsInNpemVzIjoiYW55IiwidHlwZSI6ImltYWdlL3N2Zyt4bWwiLCJwdXJwb3NlIjoiYW55IG1hc2thYmxlIn1dfQ==">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iI0ZBRjVFRCIvPjx0ZXh0IHg9IjI1NiIgeT0iMjgwIiBmb250LWZhbWlseT0ic2VyaWYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmb250LXNpemU9IjMwMCIgZmlsbD0iIzZCOEU1QSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSI+44GTPC90ZXh0Pjwvc3ZnPg==">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iI0ZBRjVFRCIvPjx0ZXh0IHg9IjI1NiIgeT0iMjgwIiBmb250LWZhbWlseT0ic2VyaWYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmb250LXNpemU9IjMwMCIgZmlsbD0iIzZCOEU1QSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSI+44GTPC90ZXh0Pjwvc3ZnPg==">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
@@ -580,6 +588,46 @@ main {
   margin-bottom: 4px;
 }
 
+.replace-line {
+  padding: 4px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  min-height: 1em;
+  cursor: pointer;
+  margin: 0 4px;
+  transition: background 0.12s;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.replace-line:active {
+  background: var(--bg-soft);
+}
+.replace-line.blank {
+  color: var(--text-sub);
+  opacity: 0.5;
+  font-size: 11px;
+}
+.replace-line.in-range {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+.replace-line.start-only {
+  background: var(--accent);
+  color: white;
+  font-weight: 500;
+}
+.replace-chunks {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
 .toast {
   position: fixed;
   bottom: 96px;
@@ -964,6 +1012,7 @@ function openDetail(id) {
       <div class="detail-actions">
         <button class="action-btn" data-action="copy">📋 コピー</button>
         <button class="action-btn" data-action="edit">✏️ 編集</button>
+        <button class="action-btn" data-action="replace">🔄 差し替え</button>
         <button class="action-btn" data-action="split">✂️ 分割</button>
         ${hasHistory ? `<button class="action-btn" data-action="history">📚 履歴</button>` : ''}
         <button class="action-btn danger" data-action="delete">🗑 削除</button>
@@ -977,6 +1026,7 @@ function openDetail(id) {
       if (a === 'close') closeModal();
       else if (a === 'copy') copyPrompt(id);
       else if (a === 'edit') openEdit(id);
+      else if (a === 'replace') openReplace(id);
       else if (a === 'split') openSplit(id);
       else if (a === 'history') openHistory(id);
       else if (a === 'delete') deletePrompt(id);
@@ -1056,8 +1106,6 @@ function openEdit(id) {
       else if (a === 'save') savePrompt(id);
     });
   });
-
-  setTimeout(() => document.getElementById('editTitle').focus(), 100);
 }
 
 function normalizeFolder(raw) {
@@ -1282,6 +1330,161 @@ async function saveMerged(selected) {
   closeModal();
   toggleMergeMode();
   toast('合体しました');
+}
+
+// ---------- 差し替え ----------
+function openReplace(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+
+  const lines = (p.body || '').split('\n');
+  let startIdx = null;
+  let endIdx = null;
+  let lastShownRange = null;
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">🔄 差し替え</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-sub);margin-bottom:12px;line-height:1.6;">
+        「${escapeHtml(p.title || '(無題)')}」の一部を差し替えます。<br>
+        範囲の開始行と終了行をタップ（同じ行を2回でも、1行のみ差し替えOK）
+      </div>
+
+      <div id="replaceChunks" class="replace-chunks"></div>
+
+      <div id="replaceStatus" class="split-info">差し替える範囲の開始行をタップ</div>
+
+      <div id="replaceInputWrap" style="display:none; margin-top:14px;">
+        <label class="form-label">新しい内容（範囲を変えると初期化）</label>
+        <textarea class="form-textarea" id="replaceText" placeholder="差し替える内容" style="min-height:120px;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+      <button class="btn btn-secondary" data-action="clear">範囲リセット</button>
+      <button class="btn btn-primary" data-action="execute">差し替える</button>
+    </div>
+  `);
+
+  function renderReplaceLines() {
+    const container = document.getElementById('replaceChunks');
+    container.innerHTML = '';
+    lines.forEach((line, i) => {
+      const isBlank = line.trim() === '';
+      const rangeStart = startIdx !== null ? Math.min(startIdx, endIdx === null ? startIdx : endIdx) : null;
+      const rangeEnd = startIdx !== null ? Math.max(startIdx, endIdx === null ? startIdx : endIdx) : null;
+      const inRange = (rangeStart !== null && i >= rangeStart && i <= rangeEnd);
+      const startOnly = (startIdx !== null && endIdx === null && i === startIdx);
+
+      const lineEl = document.createElement('div');
+      lineEl.className = 'replace-line'
+        + (isBlank ? ' blank' : '')
+        + (startOnly ? ' start-only' : (inRange ? ' in-range' : ''));
+      lineEl.textContent = isBlank ? '(空行)' : line;
+
+      lineEl.addEventListener('click', () => {
+        if (startIdx === null) {
+          startIdx = i;
+        } else if (endIdx === null) {
+          endIdx = i;
+        } else {
+          startIdx = i;
+          endIdx = null;
+        }
+        renderReplaceLines();
+        updateStatus();
+      });
+      container.appendChild(lineEl);
+    });
+  }
+
+  function updateStatus() {
+    const status = document.getElementById('replaceStatus');
+    const inputWrap = document.getElementById('replaceInputWrap');
+
+    if (startIdx === null) {
+      status.textContent = '差し替える範囲の開始行をタップ';
+      status.classList.remove('has-split');
+      inputWrap.style.display = 'none';
+      lastShownRange = null;
+      return;
+    }
+    if (endIdx === null) {
+      status.textContent = '範囲の終了行をタップ（1行だけなら同じ行をもう一度）';
+      status.classList.remove('has-split');
+      inputWrap.style.display = 'none';
+      lastShownRange = null;
+      return;
+    }
+
+    const start = Math.min(startIdx, endIdx);
+    const end = Math.max(startIdx, endIdx);
+    const lineCount = end - start + 1;
+    status.textContent = `${lineCount}行を差し替えます`;
+    status.classList.add('has-split');
+    inputWrap.style.display = 'block';
+
+    // 範囲が変わったら、現在のテキストで初期化
+    const rangeKey = `${start}-${end}`;
+    if (lastShownRange !== rangeKey) {
+      const currentText = lines.slice(start, end + 1).join('\n');
+      document.getElementById('replaceText').value = currentText;
+      lastShownRange = rangeKey;
+    }
+  }
+
+  renderReplaceLines();
+  updateStatus();
+
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="clear"]').addEventListener('click', () => {
+    startIdx = null;
+    endIdx = null;
+    lastShownRange = null;
+    renderReplaceLines();
+    updateStatus();
+  });
+  root.querySelector('[data-action="execute"]').addEventListener('click', () => {
+    if (startIdx === null || endIdx === null) {
+      toast('範囲を選んでね');
+      return;
+    }
+    performReplace(id, lines, startIdx, endIdx);
+  });
+}
+
+async function performReplace(id, lines, startIdx, endIdx) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+
+  const newText = document.getElementById('replaceText').value;
+  const start = Math.min(startIdx, endIdx);
+  const end = Math.max(startIdx, endIdx);
+
+  // 履歴に保存
+  if (!p.history) p.history = [];
+  p.history.unshift({
+    title: p.title, body: p.body, tags: p.tags, folder: p.folder, savedAt: p.updatedAt
+  });
+  if (p.history.length > HISTORY_LIMIT) p.history = p.history.slice(0, HISTORY_LIMIT);
+
+  // 本文を更新（指定範囲を新しいテキストで差し替え）
+  const newLines = [
+    ...lines.slice(0, start),
+    ...newText.split('\n'),
+    ...lines.slice(end + 1)
+  ];
+  p.body = newLines.join('\n');
+  p.updatedAt = Date.now();
+
+  await savePrompts();
+  closeModal();
+  render();
+  toast('差し替えました');
 }
 
 // ---------- 分割 ----------
