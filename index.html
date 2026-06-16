@@ -1011,6 +1011,7 @@ function openDetail(id) {
       </div>
       <div class="detail-actions">
         <button class="action-btn" data-action="copy">📋 コピー</button>
+        <button class="action-btn" data-action="partialcopy">📑 一部</button>
         <button class="action-btn" data-action="edit">✏️ 編集</button>
         <button class="action-btn" data-action="replace">🔄 差し替え</button>
         <button class="action-btn" data-action="split">✂️ 分割</button>
@@ -1025,6 +1026,7 @@ function openDetail(id) {
       const a = b.dataset.action;
       if (a === 'close') closeModal();
       else if (a === 'copy') copyPrompt(id);
+      else if (a === 'partialcopy') openPartialCopy(id);
       else if (a === 'edit') openEdit(id);
       else if (a === 'replace') openReplace(id);
       else if (a === 'split') openSplit(id);
@@ -1332,6 +1334,129 @@ async function saveMerged(selected) {
   toast('合体しました');
 }
 
+// ---------- 部分コピー ----------
+function openPartialCopy(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+
+  const lines = (p.body || '').split('\n');
+  let startIdx = null;
+  let endIdx = null;
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">📑 一部コピー</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-sub);margin-bottom:12px;line-height:1.6;">
+        「${escapeHtml(p.title || '(無題)')}」から一部を取り出してコピーします。<br>
+        範囲の開始行と終了行をタップ（1行だけなら同じ行を2回）
+      </div>
+
+      <div id="copyStatus" class="split-info" style="margin-bottom:10px;">範囲の開始行をタップ</div>
+
+      <div id="copyChunks" class="replace-chunks"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+      <button class="btn btn-secondary" data-action="clear">範囲リセット</button>
+      <button class="btn btn-primary" data-action="execute">コピー</button>
+    </div>
+  `);
+
+  function renderCopyLines() {
+    const container = document.getElementById('copyChunks');
+    container.innerHTML = '';
+    lines.forEach((line, i) => {
+      const isBlank = line.trim() === '';
+      const rangeStart = startIdx !== null ? Math.min(startIdx, endIdx === null ? startIdx : endIdx) : null;
+      const rangeEnd = startIdx !== null ? Math.max(startIdx, endIdx === null ? startIdx : endIdx) : null;
+      const inRange = (rangeStart !== null && i >= rangeStart && i <= rangeEnd);
+      const startOnly = (startIdx !== null && endIdx === null && i === startIdx);
+
+      const lineEl = document.createElement('div');
+      lineEl.className = 'replace-line'
+        + (isBlank ? ' blank' : '')
+        + (startOnly ? ' start-only' : (inRange ? ' in-range' : ''));
+      lineEl.textContent = isBlank ? '(空行)' : line;
+
+      lineEl.addEventListener('click', () => {
+        if (startIdx === null) startIdx = i;
+        else if (endIdx === null) endIdx = i;
+        else { startIdx = i; endIdx = null; }
+        renderCopyLines();
+        updateCopyStatus();
+      });
+      container.appendChild(lineEl);
+    });
+  }
+
+  function updateCopyStatus() {
+    const status = document.getElementById('copyStatus');
+    if (startIdx === null) {
+      status.textContent = '範囲の開始行をタップ';
+      status.classList.remove('has-split');
+      return;
+    }
+    if (endIdx === null) {
+      status.textContent = '終了行をタップ（1行だけなら同じ行をもう一度）';
+      status.classList.remove('has-split');
+      return;
+    }
+    const start = Math.min(startIdx, endIdx);
+    const end = Math.max(startIdx, endIdx);
+    status.textContent = `${end - start + 1}行をコピーします`;
+    status.classList.add('has-split');
+  }
+
+  renderCopyLines();
+  updateCopyStatus();
+
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="clear"]').addEventListener('click', () => {
+    startIdx = null; endIdx = null;
+    renderCopyLines();
+    updateCopyStatus();
+  });
+  root.querySelector('[data-action="execute"]').addEventListener('click', () => {
+    if (startIdx === null || endIdx === null) {
+      toast('範囲を選んでね');
+      return;
+    }
+    performPartialCopy(lines, startIdx, endIdx);
+  });
+}
+
+async function performPartialCopy(lines, startIdx, endIdx) {
+  const start = Math.min(startIdx, endIdx);
+  const end = Math.max(startIdx, endIdx);
+  const text = lines.slice(start, end + 1).join('\n');
+  const lineCount = end - start + 1;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    closeModal();
+    toast(`${lineCount}行をコピーしました`);
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      closeModal();
+      toast(`${lineCount}行をコピーしました`);
+    } catch {
+      toast('コピーできませんでした');
+    }
+    document.body.removeChild(ta);
+  }
+}
+
 // ---------- 差し替え ----------
 function openReplace(id) {
   const p = prompts.find(x => x.id === id);
@@ -1350,17 +1475,17 @@ function openReplace(id) {
     <div class="modal-body">
       <div style="font-size:12px;color:var(--text-sub);margin-bottom:12px;line-height:1.6;">
         「${escapeHtml(p.title || '(無題)')}」の一部を差し替えます。<br>
-        範囲の開始行と終了行をタップ（同じ行を2回でも、1行のみ差し替えOK）
+        下の行リストで範囲をタップ → 上の入力欄で内容を書き換え
       </div>
 
-      <div id="replaceChunks" class="replace-chunks"></div>
-
-      <div id="replaceStatus" class="split-info">差し替える範囲の開始行をタップ</div>
-
-      <div id="replaceInputWrap" style="display:none; margin-top:14px;">
+      <div id="replaceInputWrap" style="display:none; margin-bottom:14px;">
         <label class="form-label">新しい内容（範囲を変えると初期化）</label>
         <textarea class="form-textarea" id="replaceText" placeholder="差し替える内容" style="min-height:120px;"></textarea>
       </div>
+
+      <div id="replaceStatus" class="split-info" style="margin-bottom:10px;">差し替える範囲の開始行をタップ</div>
+
+      <div id="replaceChunks" class="replace-chunks"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-action="close">キャンセル</button>
