@@ -1014,6 +1014,7 @@ function openDetail(id) {
         <button class="action-btn" data-action="partialcopy">📑 一部</button>
         <button class="action-btn" data-action="edit">✏️ 編集</button>
         <button class="action-btn" data-action="replace">🔄 差し替え</button>
+        <button class="action-btn" data-action="replacetext">🔁 置換</button>
         <button class="action-btn" data-action="split">✂️ 分割</button>
         ${hasHistory ? `<button class="action-btn" data-action="history">📚 履歴</button>` : ''}
         <button class="action-btn danger" data-action="delete">🗑 削除</button>
@@ -1029,6 +1030,7 @@ function openDetail(id) {
       else if (a === 'partialcopy') openPartialCopy(id);
       else if (a === 'edit') openEdit(id);
       else if (a === 'replace') openReplace(id);
+      else if (a === 'replacetext') openReplaceText(id);
       else if (a === 'split') openSplit(id);
       else if (a === 'history') openHistory(id);
       else if (a === 'delete') deletePrompt(id);
@@ -1455,6 +1457,144 @@ async function performPartialCopy(lines, startIdx, endIdx) {
     }
     document.body.removeChild(ta);
   }
+}
+
+// ---------- 置換（文字列） ----------
+function openReplaceText(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">🔁 置換</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-sub);margin-bottom:12px;line-height:1.6;">
+        「${escapeHtml(p.title || '(無題)')}」の中の文字を一括置換します。
+      </div>
+
+      <div class="form-field">
+        <label class="form-label">検索する文字</label>
+        <input type="text" class="form-input" id="findText" placeholder="探す文字">
+      </div>
+
+      <div class="form-field">
+        <label class="form-label">置換する文字（空欄なら削除）</label>
+        <input type="text" class="form-input" id="newText" placeholder="新しい文字">
+      </div>
+
+      <div class="form-field">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="caseSensitive" style="width:16px;height:16px;accent-color:var(--accent);">
+          大文字小文字を区別する
+        </label>
+      </div>
+
+      <div id="replaceTextStatus" class="split-info">検索する文字を入力</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+      <button class="btn btn-primary" data-action="execute">すべて置換</button>
+    </div>
+  `);
+
+  function countMatches(body, findStr, caseSensitive) {
+    if (!findStr) return 0;
+    if (caseSensitive) {
+      return body.split(findStr).length - 1;
+    } else {
+      const escaped = findStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const matches = body.match(new RegExp(escaped, 'gi'));
+      return matches ? matches.length : 0;
+    }
+  }
+
+  function updateStatus() {
+    const findStr = document.getElementById('findText').value;
+    const caseSensitive = document.getElementById('caseSensitive').checked;
+    const status = document.getElementById('replaceTextStatus');
+
+    if (!findStr) {
+      status.textContent = '検索する文字を入力';
+      status.classList.remove('has-split');
+      return;
+    }
+
+    const count = countMatches(p.body, findStr, caseSensitive);
+    if (count === 0) {
+      status.textContent = '見つかりませんでした';
+      status.classList.remove('has-split');
+    } else {
+      status.textContent = `${count}か所が置換されます`;
+      status.classList.add('has-split');
+    }
+  }
+
+  ['findText', 'newText', 'caseSensitive'].forEach(eid => {
+    const el = document.getElementById(eid);
+    el.addEventListener('input', updateStatus);
+    el.addEventListener('change', updateStatus);
+  });
+
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="execute"]').addEventListener('click', () => {
+    performReplaceText(id);
+  });
+}
+
+async function performReplaceText(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+
+  const findStr = document.getElementById('findText').value;
+  const replaceStr = document.getElementById('newText').value;
+  const caseSensitive = document.getElementById('caseSensitive').checked;
+
+  if (!findStr) {
+    toast('検索する文字を入れてね');
+    return;
+  }
+
+  let newBody;
+  let count = 0;
+
+  if (caseSensitive) {
+    const parts = p.body.split(findStr);
+    count = parts.length - 1;
+    newBody = parts.join(replaceStr);
+  } else {
+    const escaped = findStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'gi');
+    const matches = p.body.match(regex);
+    count = matches ? matches.length : 0;
+    newBody = p.body.replace(regex, replaceStr);
+  }
+
+  if (count === 0) {
+    toast('見つかりませんでした');
+    return;
+  }
+
+  if (!confirm(`${count}か所を「${findStr}」→「${replaceStr || '(削除)'}」に置換します。\n元に戻したいときは履歴から戻せます。よろしい？`)) {
+    return;
+  }
+
+  // 履歴に保存
+  if (!p.history) p.history = [];
+  p.history.unshift({
+    title: p.title, body: p.body, tags: p.tags, folder: p.folder, savedAt: p.updatedAt
+  });
+  if (p.history.length > HISTORY_LIMIT) p.history = p.history.slice(0, HISTORY_LIMIT);
+
+  p.body = newBody;
+  p.updatedAt = Date.now();
+
+  await savePrompts();
+  closeModal();
+  render();
+  toast(`${count}か所を置換しました`);
 }
 
 // ---------- 差し替え ----------
