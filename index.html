@@ -628,6 +628,44 @@ main {
   margin-bottom: 10px;
 }
 
+.step-context {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.8;
+  max-height: 45vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.match-highlight {
+  background: var(--accent);
+  color: white;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+.step-progress {
+  font-size: 12px;
+  color: var(--text-sub);
+  margin-bottom: 10px;
+}
+.step-question {
+  font-size: 13px;
+  color: var(--text-sub);
+  margin-top: 12px;
+  line-height: 1.6;
+}
+.modal-footer.wrap {
+  flex-wrap: wrap;
+}
+.modal-footer.wrap .btn {
+  flex: 1;
+  min-width: 70px;
+}
+
 .toast {
   position: fixed;
   bottom: 96px;
@@ -1493,8 +1531,9 @@ function openReplaceText(id) {
 
       <div id="replaceTextStatus" class="split-info">検索する文字を入力</div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer wrap">
       <button class="btn btn-ghost" data-action="close">キャンセル</button>
+      <button class="btn btn-secondary" data-action="step">ひとつずつ</button>
       <button class="btn btn-primary" data-action="execute">すべて置換</button>
     </div>
   `);
@@ -1539,6 +1578,9 @@ function openReplaceText(id) {
 
   const root = document.getElementById('modalContent');
   root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="step"]').addEventListener('click', () => {
+    startStepReplace(id);
+  });
   root.querySelector('[data-action="execute"]').addEventListener('click', () => {
     performReplaceText(id);
   });
@@ -1595,6 +1637,223 @@ async function performReplaceText(id) {
   closeModal();
   render();
   toast(`${count}か所を置換しました`);
+}
+
+// ---------- ひとつずつ置換 ----------
+let stepReplaceState = null;
+
+function findAllMatches(body, findStr, caseSensitive) {
+  const matches = [];
+  if (!findStr) return matches;
+  if (caseSensitive) {
+    let pos = 0;
+    while (true) {
+      const i = body.indexOf(findStr, pos);
+      if (i === -1) break;
+      matches.push({ start: i, end: i + findStr.length });
+      pos = i + findStr.length;
+    }
+  } else {
+    const escaped = findStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'gi');
+    let m;
+    while ((m = regex.exec(body)) !== null) {
+      matches.push({ start: m.index, end: m.index + m[0].length });
+      if (m[0].length === 0) regex.lastIndex++;
+    }
+  }
+  return matches;
+}
+
+function startStepReplace(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+
+  const findStr = document.getElementById('findText').value;
+  const replaceStr = document.getElementById('newText').value;
+  const caseSensitive = document.getElementById('caseSensitive').checked;
+
+  if (!findStr) {
+    toast('検索する文字を入れてね');
+    return;
+  }
+
+  const matches = findAllMatches(p.body, findStr, caseSensitive);
+  if (matches.length === 0) {
+    toast('見つかりませんでした');
+    return;
+  }
+
+  stepReplaceState = {
+    id, findStr, replaceStr, caseSensitive,
+    originalBody: p.body,
+    currentBody: p.body,
+    matches,
+    currentIdx: 0,
+    replaceCount: 0,
+    skipCount: 0,
+  };
+  showStepReplaceUI();
+}
+
+function showStepReplaceUI() {
+  const s = stepReplaceState;
+  if (!s) return;
+  const match = s.matches[s.currentIdx];
+
+  // 文脈表示（前後150文字くらい）
+  const contextBefore = 150;
+  const contextAfter = 150;
+  const start = Math.max(0, match.start - contextBefore);
+  const end = Math.min(s.currentBody.length, match.end + contextAfter);
+
+  const before = s.currentBody.slice(start, match.start);
+  const matchText = s.currentBody.slice(match.start, match.end);
+  const after = s.currentBody.slice(match.end, end);
+  const beforeEllipsis = start > 0 ? '…' : '';
+  const afterEllipsis = end < s.currentBody.length ? '…' : '';
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">🔁 ひとつずつ置換</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="step-progress">
+        ${s.currentIdx + 1} / ${s.matches.length} か所目
+        ${s.replaceCount > 0 ? `（済 ${s.replaceCount}）` : ''}
+        ${s.skipCount > 0 ? `（飛 ${s.skipCount}）` : ''}
+      </div>
+
+      <div class="step-context">${escapeHtml(beforeEllipsis)}${escapeHtml(before)}<span class="match-highlight">${escapeHtml(matchText)}</span>${escapeHtml(after)}${escapeHtml(afterEllipsis)}</div>
+
+      <div class="step-question">
+        <strong style="color:var(--text);">「${escapeHtml(s.findStr)}」</strong> を 
+        <strong style="color:var(--accent-dark);">「${escapeHtml(s.replaceStr || '(削除)')}」</strong> に置き換える？
+      </div>
+    </div>
+    <div class="modal-footer wrap">
+      <button class="btn btn-ghost" data-action="abort">中断</button>
+      <button class="btn btn-secondary" data-action="skip">飛ばす</button>
+      <button class="btn btn-secondary" data-action="restAll">残り全部</button>
+      <button class="btn btn-primary" data-action="replace">置換</button>
+    </div>
+  `);
+
+  const root = document.getElementById('modalContent');
+  root.querySelector('[data-action="close"]').addEventListener('click', () => askAbort());
+  root.querySelector('[data-action="abort"]').addEventListener('click', () => askAbort());
+  root.querySelector('[data-action="skip"]').addEventListener('click', stepSkip);
+  root.querySelector('[data-action="replace"]').addEventListener('click', stepReplace);
+  root.querySelector('[data-action="restAll"]').addEventListener('click', stepReplaceRest);
+}
+
+function askAbort() {
+  const s = stepReplaceState;
+  if (!s) { closeModal(); return; }
+  if (s.replaceCount > 0) {
+    if (confirm(`ここまで ${s.replaceCount}か所 置換しました。\n「OK」で確定、「キャンセル」で全部なかったことに。`)) {
+      commitStepReplace();
+    } else {
+      stepReplaceState = null;
+      closeModal();
+    }
+  } else {
+    stepReplaceState = null;
+    closeModal();
+  }
+}
+
+function stepNext() {
+  const s = stepReplaceState;
+  s.currentIdx++;
+  if (s.currentIdx >= s.matches.length) {
+    finishStepReplace();
+  } else {
+    showStepReplaceUI();
+  }
+}
+
+function stepSkip() {
+  stepReplaceState.skipCount++;
+  stepNext();
+}
+
+function stepReplace() {
+  const s = stepReplaceState;
+  const match = s.matches[s.currentIdx];
+
+  s.currentBody =
+    s.currentBody.slice(0, match.start) +
+    s.replaceStr +
+    s.currentBody.slice(match.end);
+  s.replaceCount++;
+
+  // 後続のマッチ位置をずらす
+  const delta = s.replaceStr.length - (match.end - match.start);
+  for (let i = s.currentIdx + 1; i < s.matches.length; i++) {
+    s.matches[i].start += delta;
+    s.matches[i].end += delta;
+  }
+
+  stepNext();
+}
+
+function stepReplaceRest() {
+  const s = stepReplaceState;
+  const remaining = s.matches.length - s.currentIdx;
+  if (!confirm(`残り ${remaining}か所 を全部置換する？`)) return;
+
+  while (s.currentIdx < s.matches.length) {
+    const match = s.matches[s.currentIdx];
+    s.currentBody =
+      s.currentBody.slice(0, match.start) +
+      s.replaceStr +
+      s.currentBody.slice(match.end);
+    s.replaceCount++;
+
+    const delta = s.replaceStr.length - (match.end - match.start);
+    for (let i = s.currentIdx + 1; i < s.matches.length; i++) {
+      s.matches[i].start += delta;
+      s.matches[i].end += delta;
+    }
+    s.currentIdx++;
+  }
+  finishStepReplace();
+}
+
+function finishStepReplace() {
+  const s = stepReplaceState;
+  if (s.replaceCount === 0) {
+    toast('置換しませんでした');
+    stepReplaceState = null;
+    closeModal();
+    return;
+  }
+  commitStepReplace();
+}
+
+async function commitStepReplace() {
+  const s = stepReplaceState;
+  if (!s) return;
+  const p = prompts.find(x => x.id === s.id);
+  if (!p) return;
+
+  // 元の本文を履歴に保存
+  if (!p.history) p.history = [];
+  p.history.unshift({
+    title: p.title, body: s.originalBody, tags: p.tags, folder: p.folder, savedAt: p.updatedAt
+  });
+  if (p.history.length > HISTORY_LIMIT) p.history = p.history.slice(0, HISTORY_LIMIT);
+
+  p.body = s.currentBody;
+  p.updatedAt = Date.now();
+
+  await savePrompts();
+  toast(`${s.replaceCount}か所を置換しました`);
+  stepReplaceState = null;
+  closeModal();
+  render();
 }
 
 // ---------- 差し替え ----------
