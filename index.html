@@ -1111,6 +1111,7 @@ function openDetail(id) {
       <div class="detail-actions">
         <button class="action-btn" data-action="copy">📋 コピー</button>
         <button class="action-btn" data-action="partialcopy">📑 一部</button>
+        <button class="action-btn" data-action="savefile">💾 保存</button>
         <button class="action-btn" data-action="edit">✏️ 編集</button>
         <button class="action-btn" data-action="replace">🔄 差し替え</button>
         <button class="action-btn" data-action="replacetext">🔁 置換</button>
@@ -1127,6 +1128,7 @@ function openDetail(id) {
       if (a === 'close') closeModal();
       else if (a === 'copy') copyPrompt(id);
       else if (a === 'partialcopy') openPartialCopy(id);
+      else if (a === 'savefile') openSaveFile(id);
       else if (a === 'edit') openEdit(id);
       else if (a === 'replace') openReplace(id);
       else if (a === 'replacetext') openReplaceText(id);
@@ -2246,21 +2248,21 @@ function openExportDialog() {
     </div>
     <div class="modal-body">
       <div style="font-size:12px;color:var(--text-sub);margin-bottom:14px;line-height:1.6;">
-        ${prompts.length}件をひとつのファイルにまとめて書き出します。形式を選んでね。
+        ${prompts.length}件 を書き出します。形式を選んでね。
       </div>
 
       <div style="display:flex;flex-direction:column;gap:10px;">
         <button class="menu-item" data-action="json">
-          <div class="menu-item-title">🗂 JSON（バックアップ用）</div>
-          <div class="menu-item-desc">構造をそのまま保存。インポートで完全に元に戻せる。他アプリに貼るには不向き</div>
+          <div class="menu-item-title">🗂 JSON（バックアップ）</div>
+          <div class="menu-item-desc">1ファイルに全部まとめる。インポートで完全に元に戻せる</div>
         </button>
-        <button class="menu-item" data-action="markdown">
-          <div class="menu-item-title">📝 Markdown</div>
-          <div class="menu-item-desc">見出し付きで整形。Obsidianやメモアプリに貼って読みやすい</div>
+        <button class="menu-item" data-action="indiv_md">
+          <div class="menu-item-title">📝 Markdown 個別ファイル</div>
+          <div class="menu-item-desc">プロンプトごとに別の .md ファイル（${prompts.length}個）。共有シートから保存先を選べる</div>
         </button>
-        <button class="menu-item" data-action="text">
-          <div class="menu-item-title">📄 テキスト</div>
-          <div class="menu-item-desc">プレーンテキスト。記号で区切ったシンプルな形</div>
+        <button class="menu-item" data-action="indiv_txt">
+          <div class="menu-item-title">📄 テキスト 個別ファイル</div>
+          <div class="menu-item-desc">プロンプトごとに別の .txt ファイル（${prompts.length}個）。同じく共有シートから</div>
         </button>
       </div>
     </div>
@@ -2271,8 +2273,8 @@ function openExportDialog() {
   const root = document.getElementById('modalContent');
   root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
   root.querySelector('[data-action="json"]').addEventListener('click', () => { exportAsJson(); closeModal(); });
-  root.querySelector('[data-action="markdown"]').addEventListener('click', () => { exportAsMarkdown(); closeModal(); });
-  root.querySelector('[data-action="text"]').addEventListener('click', () => { exportAsText(); closeModal(); });
+  root.querySelector('[data-action="indiv_md"]').addEventListener('click', () => { closeModal(); exportAsIndividual('md', 'text/markdown'); });
+  root.querySelector('[data-action="indiv_txt"]').addEventListener('click', () => { closeModal(); exportAsIndividual('txt', 'text/plain'); });
 }
 
 function downloadFile(content, filename, mimeType) {
@@ -2304,79 +2306,126 @@ function exportAsJson() {
   toast(`${prompts.length}件をJSONで保存`);
 }
 
-function exportAsMarkdown() {
-  // フォルダ順、その中で更新日順（新→旧）
-  const sorted = [...prompts].sort((a, b) => {
-    const fa = a.folder || '';
-    const fb = b.folder || '';
-    if (fa !== fb) return fa.localeCompare(fb, 'ja');
-    return b.updatedAt - a.updatedAt;
-  });
-
-  const lines = [
-    `# ことのはノート`,
-    ``,
-    `${prompts.length}件 / ${new Date().toLocaleString('ja-JP')}`,
-    ``,
-    `---`,
-    ``
-  ];
-
-  let lastFolder = null;
-  sorted.forEach(p => {
-    const folder = p.folder || '(ホーム)';
-    if (folder !== lastFolder) {
-      lines.push(`## 📁 ${folder}`);
-      lines.push('');
-      lastFolder = folder;
-    }
-    lines.push(`### ${p.title || '(無題)'}`);
-    lines.push('');
-    if (p.tags && p.tags.length) {
-      lines.push(`**タグ**: ${p.tags.map(t => '`' + t + '`').join(' ')}`);
-      lines.push('');
-    }
-    lines.push(p.body || '');
-    lines.push('');
-    lines.push('---');
-    lines.push('');
-  });
-
-  downloadFile(lines.join('\n'), `kotonoha_${timestamp()}.md`, 'text/markdown');
-  toast(`${prompts.length}件をMarkdownで保存`);
+// ファイル名で使えない文字を安全に
+function safeFilename(s, maxLen) {
+  return (s || '無題').replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').replace(/\s+/g, ' ').trim().slice(0, maxLen || 80);
 }
 
-function exportAsText() {
-  const sorted = [...prompts].sort((a, b) => {
-    const fa = a.folder || '';
-    const fb = b.folder || '';
-    if (fa !== fb) return fa.localeCompare(fb, 'ja');
-    return b.updatedAt - a.updatedAt;
+// 1プロンプトの内容を整形（Markdown / テキスト 兼用、見た目はほぼ同じ）
+function formatPromptForFile(p) {
+  const parts = [];
+  parts.push(`# ${p.title || '(無題)'}`);
+  parts.push('');
+  if (p.folder) parts.push(`📁 ${p.folder}`);
+  if (p.tags && p.tags.length) parts.push(`🏷 ${p.tags.join(', ')}`);
+  if (p.folder || (p.tags && p.tags.length)) parts.push('');
+  parts.push(p.body || '');
+  return parts.join('\n');
+}
+
+async function exportAsIndividual(extension, mimeType) {
+  if (prompts.length === 0) {
+    toast('保存するプロンプトがないよ');
+    return;
+  }
+
+  // ファイル作成
+  const files = prompts.map(p => {
+    const folderPrefix = p.folder ? safeFilename(p.folder.replace(/\//g, '_'), 40) + '_' : '';
+    const filename = `${folderPrefix}${safeFilename(p.title, 80)}.${extension}`;
+    return new File([formatPromptForFile(p)], filename, { type: mimeType + ';charset=utf-8' });
   });
 
-  const sep = '='.repeat(50);
-  const lines = [
-    sep,
-    `ことのはノート（${prompts.length}件）`,
-    new Date().toLocaleString('ja-JP'),
-    sep,
-    ''
-  ];
+  // navigator.share で共有シート（モバイルChrome対応）
+  if (navigator.share && navigator.canShare && navigator.canShare({ files })) {
+    try {
+      await navigator.share({
+        files,
+        title: `ことのはノート ${prompts.length}件`
+      });
+      toast(`${prompts.length}件を共有しました`);
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return; // ユーザーが共有シートをキャンセル
+      // それ以外のエラーはフォールバックへ
+    }
+  }
 
-  sorted.forEach(p => {
-    lines.push(sep);
-    lines.push(p.title || '(無題)');
-    if (p.folder) lines.push(`[${p.folder}]`);
-    if (p.tags && p.tags.length) lines.push(`(${p.tags.join(', ')})`);
-    lines.push(sep);
-    lines.push('');
-    lines.push(p.body || '');
-    lines.push('');
-    lines.push('');
-  });
+  // フォールバック：連続ダウンロード
+  if (!confirm(`${prompts.length}個のファイルを連続でダウンロードします。\nブラウザが「複数ファイルのダウンロードを許可しますか？」と聞いてきたら「許可」を選んでね。\n続行する？`)) return;
 
-  downloadFile(lines.join('\n'), `kotonoha_${timestamp()}.txt`, 'text/plain');
-  toast(`${prompts.length}件をテキストで保存`);
+  for (const file of files) {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    await new Promise(r => setTimeout(r, 120));
+    URL.revokeObjectURL(url);
+  }
+  toast(`${prompts.length}件をダウンロードしました`);
+}
+
+// 詳細画面からの個別ファイル保存
+function openSaveFile(id) {
+  const p = prompts.find(x => x.id === id);
+  if (!p) return;
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">💾 ファイル保存</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:14px;margin-bottom:14px;line-height:1.6;">
+        「${escapeHtml(p.title || '(無題)')}」を1ファイルとして保存します。
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="menu-item" data-action="md">
+          <div class="menu-item-title">📝 Markdown (.md)</div>
+          <div class="menu-item-desc">タイトル・フォルダ・タグ付きで整形</div>
+        </button>
+        <button class="menu-item" data-action="txt">
+          <div class="menu-item-title">📄 テキスト (.txt)</div>
+          <div class="menu-item-desc">同じ内容、拡張子だけ違う</div>
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+    </div>
+  `);
+
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="md"]').addEventListener('click', () => saveOnePromptAsFile(p, 'md', 'text/markdown'));
+  root.querySelector('[data-action="txt"]').addEventListener('click', () => saveOnePromptAsFile(p, 'txt', 'text/plain'));
+}
+
+async function saveOnePromptAsFile(p, extension, mimeType) {
+  const folderPrefix = p.folder ? safeFilename(p.folder.replace(/\//g, '_'), 40) + '_' : '';
+  const filename = `${folderPrefix}${safeFilename(p.title, 80)}.${extension}`;
+  const content = formatPromptForFile(p);
+
+  // navigator.share対応端末ではシェアシートで
+  try {
+    const file = new File([content], filename, { type: mimeType + ';charset=utf-8' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: p.title || '(無題)' });
+      closeModal();
+      toast('共有しました');
+      return;
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') { closeModal(); return; }
+  }
+
+  // フォールバック：ふつうにダウンロード
+  downloadFile(content, filename, mimeType);
+  closeModal();
+  toast('保存しました');
 }
 
 function importData() {
