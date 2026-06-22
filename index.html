@@ -666,6 +666,64 @@ main {
   min-width: 70px;
 }
 
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 12px;
+}
+.header-menu-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: var(--text-sub);
+  cursor: pointer;
+  padding: 2px 12px;
+  border-radius: 10px;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+  font-family: inherit;
+}
+.header-menu-btn:active {
+  background: var(--bg-soft);
+  color: var(--accent-dark);
+}
+
+.menu-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  text-align: left;
+  font-family: inherit;
+  display: block;
+  width: 100%;
+  color: var(--text);
+}
+.menu-item:active {
+  background: var(--accent-soft);
+  transform: scale(0.98);
+}
+.menu-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 3px;
+}
+.menu-item-desc {
+  font-size: 11px;
+  color: var(--text-sub);
+  line-height: 1.5;
+}
+.menu-item.danger {
+  border-color: #F0D5D0;
+}
+.menu-item.danger .menu-item-title {
+  color: var(--danger);
+}
+
 .toast {
   position: fixed;
   bottom: 96px;
@@ -687,7 +745,10 @@ main {
 </head>
 <body>
 <header>
-  <h1 class="app-title">ことのはノート</h1>
+  <div class="header-row">
+    <h1 class="app-title">ことのはノート</h1>
+    <button class="header-menu-btn" id="menuBtn" aria-label="メニュー">⋯</button>
+  </div>
   <input type="search" class="search-bar" id="search" placeholder="検索（タイトル・本文・タグ）">
 </header>
 
@@ -2138,6 +2199,261 @@ async function performSplit(id, lines, splitIndices, keepOriginal) {
   toast(`${chunks.length}個に分割しました`);
 }
 
+// ---------- メニュー / エクスポート / インポート ----------
+function openMenu() {
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">⚙️ メニュー</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-sub);margin-bottom:14px;">
+        現在 ${prompts.length}件 のプロンプトが保存されています
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="menu-item" data-action="export">
+          <div class="menu-item-title">📤 エクスポート</div>
+          <div class="menu-item-desc">全プロンプトをまとめてファイルに書き出し（JSON / Markdown / テキスト）</div>
+        </button>
+        <button class="menu-item" data-action="import">
+          <div class="menu-item-title">📥 インポート</div>
+          <div class="menu-item-desc">エクスポートしたJSONを読み込んで取り込み</div>
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">閉じる</button>
+    </div>
+  `);
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="export"]').addEventListener('click', () => {
+    closeModal();
+    setTimeout(openExportDialog, 100);
+  });
+  root.querySelector('[data-action="import"]').addEventListener('click', () => {
+    closeModal();
+    setTimeout(importData, 100);
+  });
+}
+
+function openExportDialog() {
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">📤 エクスポート</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-sub);margin-bottom:14px;line-height:1.6;">
+        ${prompts.length}件をひとつのファイルにまとめて書き出します。形式を選んでね。
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="menu-item" data-action="json">
+          <div class="menu-item-title">🗂 JSON（バックアップ用）</div>
+          <div class="menu-item-desc">構造をそのまま保存。インポートで完全に元に戻せる。他アプリに貼るには不向き</div>
+        </button>
+        <button class="menu-item" data-action="markdown">
+          <div class="menu-item-title">📝 Markdown</div>
+          <div class="menu-item-desc">見出し付きで整形。Obsidianやメモアプリに貼って読みやすい</div>
+        </button>
+        <button class="menu-item" data-action="text">
+          <div class="menu-item-title">📄 テキスト</div>
+          <div class="menu-item-desc">プレーンテキスト。記号で区切ったシンプルな形</div>
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+    </div>
+  `);
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="json"]').addEventListener('click', () => { exportAsJson(); closeModal(); });
+  root.querySelector('[data-action="markdown"]').addEventListener('click', () => { exportAsMarkdown(); closeModal(); });
+  root.querySelector('[data-action="text"]').addEventListener('click', () => { exportAsText(); closeModal(); });
+}
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function timestamp() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+}
+
+function exportAsJson() {
+  const data = {
+    version: 1,
+    appName: 'ことのはノート',
+    exportedAt: new Date().toISOString(),
+    prompts: prompts
+  };
+  downloadFile(JSON.stringify(data, null, 2), `kotonoha_${timestamp()}.json`, 'application/json');
+  toast(`${prompts.length}件をJSONで保存`);
+}
+
+function exportAsMarkdown() {
+  // フォルダ順、その中で更新日順（新→旧）
+  const sorted = [...prompts].sort((a, b) => {
+    const fa = a.folder || '';
+    const fb = b.folder || '';
+    if (fa !== fb) return fa.localeCompare(fb, 'ja');
+    return b.updatedAt - a.updatedAt;
+  });
+
+  const lines = [
+    `# ことのはノート`,
+    ``,
+    `${prompts.length}件 / ${new Date().toLocaleString('ja-JP')}`,
+    ``,
+    `---`,
+    ``
+  ];
+
+  let lastFolder = null;
+  sorted.forEach(p => {
+    const folder = p.folder || '(ホーム)';
+    if (folder !== lastFolder) {
+      lines.push(`## 📁 ${folder}`);
+      lines.push('');
+      lastFolder = folder;
+    }
+    lines.push(`### ${p.title || '(無題)'}`);
+    lines.push('');
+    if (p.tags && p.tags.length) {
+      lines.push(`**タグ**: ${p.tags.map(t => '`' + t + '`').join(' ')}`);
+      lines.push('');
+    }
+    lines.push(p.body || '');
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  });
+
+  downloadFile(lines.join('\n'), `kotonoha_${timestamp()}.md`, 'text/markdown');
+  toast(`${prompts.length}件をMarkdownで保存`);
+}
+
+function exportAsText() {
+  const sorted = [...prompts].sort((a, b) => {
+    const fa = a.folder || '';
+    const fb = b.folder || '';
+    if (fa !== fb) return fa.localeCompare(fb, 'ja');
+    return b.updatedAt - a.updatedAt;
+  });
+
+  const sep = '='.repeat(50);
+  const lines = [
+    sep,
+    `ことのはノート（${prompts.length}件）`,
+    new Date().toLocaleString('ja-JP'),
+    sep,
+    ''
+  ];
+
+  sorted.forEach(p => {
+    lines.push(sep);
+    lines.push(p.title || '(無題)');
+    if (p.folder) lines.push(`[${p.folder}]`);
+    if (p.tags && p.tags.length) lines.push(`(${p.tags.join(', ')})`);
+    lines.push(sep);
+    lines.push('');
+    lines.push(p.body || '');
+    lines.push('');
+    lines.push('');
+  });
+
+  downloadFile(lines.join('\n'), `kotonoha_${timestamp()}.txt`, 'text/plain');
+  toast(`${prompts.length}件をテキストで保存`);
+}
+
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.prompts || !Array.isArray(data.prompts)) {
+        toast('JSONフォーマットが違うみたい');
+        return;
+      }
+      openImportConfirm(data);
+    } catch (e) {
+      toast('読み込みエラー: ' + e.message);
+    }
+  });
+  input.click();
+}
+
+function openImportConfirm(data) {
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">📥 インポート</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:14px;margin-bottom:8px;line-height:1.6;">
+        ${data.prompts.length}件のプロンプトを取り込みます。
+      </div>
+      ${data.exportedAt ? `<div style="font-size:11px;color:var(--text-sub);margin-bottom:14px;">エクスポート日時: ${new Date(data.exportedAt).toLocaleString('ja-JP')}</div>` : ''}
+
+      <div style="font-size:13px;color:var(--text-sub);margin-bottom:10px;">
+        現在: ${prompts.length}件
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="menu-item" data-action="append">
+          <div class="menu-item-title">➕ 追加する（推奨）</div>
+          <div class="menu-item-desc">現在の ${prompts.length}件 はそのまま、新たに ${data.prompts.length}件 を追加</div>
+        </button>
+        <button class="menu-item danger" data-action="replace">
+          <div class="menu-item-title">🔄 置き換える（危険）</div>
+          <div class="menu-item-desc">現在の ${prompts.length}件 を削除して、${data.prompts.length}件 で完全に置き換え</div>
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+    </div>
+  `);
+
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="append"]').addEventListener('click', async () => {
+    // 新IDを振って追加
+    const newPrompts = data.prompts.map(p => ({ ...p, id: uid() }));
+    prompts.push(...newPrompts);
+    await savePrompts();
+    closeModal();
+    render();
+    toast(`${newPrompts.length}件を追加しました`);
+  });
+  root.querySelector('[data-action="replace"]').addEventListener('click', async () => {
+    if (!confirm(`現在の${prompts.length}件を全部削除して、${data.prompts.length}件で置き換えます。\n本当にいい？`)) return;
+    prompts = data.prompts;
+    await savePrompts();
+    closeModal();
+    render();
+    toast(`${data.prompts.length}件で置き換えました`);
+  });
+}
+
 // ---------- 初期化 ----------
 document.getElementById('fab').addEventListener('click', () => {
   if (mergeMode) openMerge();
@@ -2145,6 +2461,7 @@ document.getElementById('fab').addEventListener('click', () => {
 });
 document.getElementById('mergeToggle').addEventListener('click', toggleMergeMode);
 document.getElementById('search').addEventListener('input', render);
+document.getElementById('menuBtn').addEventListener('click', openMenu);
 document.getElementById('modal').addEventListener('click', e => {
   if (e.target.id === 'modal') closeModal();
 });
