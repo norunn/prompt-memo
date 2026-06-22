@@ -199,6 +199,19 @@ main {
 .fab:active { transform: scale(0.95); }
 .fab.merge-fab { font-size: 14px; font-weight: 600; }
 
+.fab-secondary {
+  right: auto;
+  left: 22px;
+  background: var(--card);
+  color: var(--accent-dark);
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 4px 12px rgba(107, 142, 90, 0.18);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+}
+.fab-secondary:active { background: var(--accent-soft); }
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -761,6 +774,7 @@ main {
 </main>
 
 <button class="fab" id="fab">＋</button>
+<button class="fab fab-secondary" id="fabDownload" style="display:none;">💾 (0)</button>
 
 <div class="modal-overlay" id="modal">
   <div class="modal" id="modalContent"></div>
@@ -1331,15 +1345,19 @@ function toggleMergeMode() {
   mergeSelected = [];
   const btn = document.getElementById('mergeToggle');
   btn.classList.toggle('active', mergeMode);
-  btn.textContent = mergeMode ? '合体モード解除' : '合体モード';
+  btn.textContent = mergeMode ? '選択モード解除' : '選択モード';
 
   const fab = document.getElementById('fab');
+  const fabDl = document.getElementById('fabDownload');
   if (mergeMode) {
     fab.classList.add('merge-fab');
     fab.textContent = '合体する (0)';
+    fabDl.style.display = 'flex';
+    fabDl.textContent = '💾 (0)';
   } else {
     fab.classList.remove('merge-fab');
     fab.textContent = '＋';
+    fabDl.style.display = 'none';
   }
   render();
 }
@@ -1349,6 +1367,7 @@ function toggleMergeSelect(id) {
   if (idx >= 0) mergeSelected.splice(idx, 1);
   else mergeSelected.push(id);
   document.getElementById('fab').textContent = `合体する (${mergeSelected.length})`;
+  document.getElementById('fabDownload').textContent = `💾 (${mergeSelected.length})`;
   render();
 }
 
@@ -1435,6 +1454,86 @@ async function saveMerged(selected) {
   closeModal();
   toggleMergeMode();
   toast('合体しました');
+}
+
+// ---------- 選択中のプロンプトをダウンロード ----------
+function openDownloadSelected() {
+  if (mergeSelected.length === 0) {
+    toast('プロンプトを選んでね');
+    return;
+  }
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">💾 ${mergeSelected.length}件をダウンロード</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-sub);margin-bottom:14px;line-height:1.6;">
+        ファイル名はタイトルそのまま、中身は本文そのまま（タイトル・フォルダ・タグの情報は付かない）。<br>
+        形式を選んでね。
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="menu-item" data-action="md">
+          <div class="menu-item-title">📝 .md（Markdown）</div>
+        </button>
+        <button class="menu-item" data-action="txt">
+          <div class="menu-item-title">📄 .txt（テキスト）</div>
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+    </div>
+  `);
+
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="md"]').addEventListener('click', () => { closeModal(); downloadSelectedFiles('md', 'text/markdown'); });
+  root.querySelector('[data-action="txt"]').addEventListener('click', () => { closeModal(); downloadSelectedFiles('txt', 'text/plain'); });
+}
+
+async function downloadSelectedFiles(ext, mime) {
+  const selected = mergeSelected.map(id => prompts.find(p => p.id === id)).filter(Boolean);
+  if (selected.length === 0) return;
+
+  const files = selected.map(p => {
+    const filename = `${safeFilename(p.title, 80)}.${ext}`;
+    const content = p.body || '';
+    return new File([content], filename, { type: mime + ';charset=utf-8' });
+  });
+
+  // navigator.share対応端末（モバイルChromeなど）
+  if (navigator.share && navigator.canShare && navigator.canShare({ files })) {
+    try {
+      await navigator.share({ files, title: `${selected.length}件のプロンプト` });
+      const count = selected.length;
+      toggleMergeMode(); // 選択解除
+      toast(`${count}件を共有しました`);
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return; // ユーザーキャンセル
+      // 他のエラーはフォールバックへ
+    }
+  }
+
+  // フォールバック：連続ダウンロード
+  if (!confirm(`${selected.length}個のファイルを連続でダウンロードします。\nブラウザが「複数ファイルを許可しますか？」と聞いてきたら「許可」を選んでね。\n続行する？`)) return;
+
+  for (const file of files) {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    await new Promise(r => setTimeout(r, 120));
+    URL.revokeObjectURL(url);
+  }
+  const count = selected.length;
+  toggleMergeMode();
+  toast(`${count}件をダウンロードしました`);
 }
 
 // ---------- 部分コピー ----------
@@ -2508,6 +2607,7 @@ document.getElementById('fab').addEventListener('click', () => {
   if (mergeMode) openMerge();
   else openEdit();
 });
+document.getElementById('fabDownload').addEventListener('click', openDownloadSelected);
 document.getElementById('mergeToggle').addEventListener('click', toggleMergeMode);
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('menuBtn').addEventListener('click', openMenu);
