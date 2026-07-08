@@ -737,6 +737,57 @@ main {
   color: var(--danger);
 }
 
+.modal-overlay.fullscreen { align-items: stretch; }
+.modal-overlay.fullscreen .modal {
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  border-radius: 0;
+  max-width: 100%;
+}
+.modal-overlay.fullscreen .modal-body {
+  display: flex;
+  flex-direction: column;
+}
+.modal-overlay.fullscreen .form-field.grow {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+.modal-overlay.fullscreen .form-field.grow .form-textarea {
+  flex: 1;
+}
+.modal-overlay.fullscreen .detail-body {
+  max-height: none;
+  flex: 1;
+}
+.modal-overlay.fullscreen .split-chunks,
+.modal-overlay.fullscreen .replace-chunks {
+  max-height: none;
+  flex: 1;
+}
+.modal-overlay.fullscreen .step-context {
+  max-height: none;
+  flex: 1;
+}
+.guess-btn {
+  width: 100%;
+  padding: 11px;
+  border-radius: 8px;
+  border: 1.5px dashed var(--accent);
+  background: var(--card);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent-dark);
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 12px;
+}
+.guess-btn:active { background: var(--accent-soft); }
+
 .toast {
   position: fixed;
   bottom: 96px;
@@ -1087,12 +1138,16 @@ function renderPromptCard(p, showFolder) {
 }
 
 // ---------- モーダル ----------
-function openModal(html) {
+function openModal(html, fullscreen) {
   document.getElementById('modalContent').innerHTML = html;
-  document.getElementById('modal').classList.add('active');
+  const overlay = document.getElementById('modal');
+  overlay.classList.toggle('fullscreen', !!fullscreen);
+  overlay.classList.add('active');
 }
 function closeModal() {
-  document.getElementById('modal').classList.remove('active');
+  const overlay = document.getElementById('modal');
+  overlay.classList.remove('active');
+  overlay.classList.remove('fullscreen');
 }
 
 // ---------- 詳細 ----------
@@ -1134,7 +1189,7 @@ function openDetail(id) {
         <button class="action-btn danger" data-action="delete">🗑 削除</button>
       </div>
     </div>
-  `);
+  `, true);
 
   document.getElementById('modalContent').querySelectorAll('[data-action]').forEach(b => {
     b.addEventListener('click', () => {
@@ -1207,7 +1262,7 @@ function openEdit(id) {
         <label class="form-label">タグ（カンマ区切り）</label>
         <input type="text" class="form-input" id="editTags" value="${escapeHtml(p ? (p.tags || []).join(', ') : '')}" placeholder="例: 設定, システム">
       </div>
-      <div class="form-field">
+      <div class="form-field grow">
         <label class="form-label">本文</label>
         <textarea class="form-textarea" id="editBody" placeholder="プロンプト本文">${escapeHtml(p ? p.body : '')}</textarea>
       </div>
@@ -1216,7 +1271,7 @@ function openEdit(id) {
       <button class="btn btn-ghost" data-action="close">キャンセル</button>
       <button class="btn btn-primary" data-action="save">保存</button>
     </div>
-  `);
+  `, true);
 
   document.getElementById('modalContent').querySelectorAll('[data-action]').forEach(b => {
     b.addEventListener('click', () => {
@@ -1565,7 +1620,7 @@ function openPartialCopy(id) {
       <button class="btn btn-secondary" data-action="clear">範囲リセット</button>
       <button class="btn btn-primary" data-action="execute">コピー</button>
     </div>
-  `);
+  `, true);
 
   function renderCopyLines() {
     const container = document.getElementById('copyChunks');
@@ -1900,7 +1955,7 @@ function showStepReplaceUI() {
       <button class="btn btn-secondary" data-action="restAll">残り全部</button>
       <button class="btn btn-primary" data-action="replace">置換</button>
     </div>
-  `);
+  `, true);
 
   const root = document.getElementById('modalContent');
   root.querySelector('[data-action="close"]').addEventListener('click', () => askAbort());
@@ -2019,6 +2074,49 @@ async function commitStepReplace() {
 }
 
 // ---------- 差し替え ----------
+
+// 文字bigramのセットを作る（比較用に空白は除去）
+function makeBigrams(text) {
+  const s = text.replace(/\s+/g, '');
+  const set = new Set();
+  for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
+  return set;
+}
+
+// 貼り付けテキストに一番似ている連続行範囲を探す
+function guessRange(bodyLines, pastedText) {
+  const target = makeBigrams(pastedText);
+  if (target.size === 0) return { score: 0, start: -1, end: -1 };
+
+  const pLineCount = pastedText.split('\n').filter(l => l.trim()).length || 1;
+  const minLen = Math.max(1, Math.floor(pLineCount * 0.4));
+  const maxLen = Math.min(bodyLines.length, Math.ceil(pLineCount * 2.5) + 2);
+
+  let best = { score: 0, start: -1, end: -1 };
+
+  for (let start = 0; start < bodyLines.length; start++) {
+    const current = new Set();
+    let common = 0;
+    const limit = Math.min(start + maxLen, bodyLines.length);
+    for (let end = start; end < limit; end++) {
+      const lineText = bodyLines[end].replace(/\s+/g, '');
+      for (let i = 0; i < lineText.length - 1; i++) {
+        const bg = lineText.slice(i, i + 2);
+        if (!current.has(bg)) {
+          current.add(bg);
+          if (target.has(bg)) common++;
+        }
+      }
+      const len = end - start + 1;
+      if (len < minLen) continue;
+      const union = current.size + target.size - common;
+      const s = union > 0 ? common / union : 0;
+      if (s > best.score) best = { score: s, start, end };
+    }
+  }
+  return best;
+}
+
 function openReplace(id) {
   const p = prompts.find(x => x.id === id);
   if (!p) return;
@@ -2027,6 +2125,7 @@ function openReplace(id) {
   let startIdx = null;
   let endIdx = null;
   let lastShownRange = null;
+  let userEdited = false; // ユーザーがテキストエリアを触ったら自動流し込みしない
 
   openModal(`
     <div class="modal-header">
@@ -2036,15 +2135,17 @@ function openReplace(id) {
     <div class="modal-body">
       <div style="font-size:12px;color:var(--text-sub);margin-bottom:12px;line-height:1.6;">
         「${escapeHtml(p.title || '(無題)')}」の一部を差し替えます。<br>
-        下の行リストで範囲をタップ → 上の入力欄で内容を書き換え
+        新しい内容を貼り付けて推測させるか、下の行リストで範囲をタップ
       </div>
 
-      <div id="replaceInputWrap" style="display:none; margin-bottom:14px;">
-        <label class="form-label">新しい内容（範囲を変えると初期化）</label>
-        <textarea class="form-textarea" id="replaceText" placeholder="差し替える内容" style="min-height:120px;"></textarea>
+      <div style="margin-bottom:10px;">
+        <label class="form-label">新しい内容</label>
+        <textarea class="form-textarea" id="replaceText" placeholder="ここに新しい内容を貼り付け" style="min-height:110px;"></textarea>
       </div>
 
-      <div id="replaceStatus" class="split-info" style="margin-bottom:10px;">差し替える範囲の開始行をタップ</div>
+      <button class="guess-btn" data-action="guess">🔍 貼り付けから範囲を推測</button>
+
+      <div id="replaceStatus" class="split-info" style="margin-bottom:10px;">貼り付けて推測するか、行をタップして範囲指定</div>
 
       <div id="replaceChunks" class="replace-chunks"></div>
     </div>
@@ -2053,7 +2154,7 @@ function openReplace(id) {
       <button class="btn btn-secondary" data-action="clear">範囲リセット</button>
       <button class="btn btn-primary" data-action="execute">差し替える</button>
     </div>
-  `);
+  `, true);
 
   function renderReplaceLines() {
     const container = document.getElementById('replaceChunks');
@@ -2070,6 +2171,7 @@ function openReplace(id) {
         + (isBlank ? ' blank' : '')
         + (startOnly ? ' start-only' : (inRange ? ' in-range' : ''));
       lineEl.textContent = isBlank ? '(空行)' : line;
+      lineEl.dataset.line = i;
 
       lineEl.addEventListener('click', () => {
         if (startIdx === null) {
@@ -2087,21 +2189,24 @@ function openReplace(id) {
     });
   }
 
-  function updateStatus() {
+  function updateStatus(customMsg) {
     const status = document.getElementById('replaceStatus');
-    const inputWrap = document.getElementById('replaceInputWrap');
+
+    if (customMsg) {
+      status.textContent = customMsg.text;
+      status.classList.toggle('has-split', !!customMsg.good);
+      return;
+    }
 
     if (startIdx === null) {
-      status.textContent = '差し替える範囲の開始行をタップ';
+      status.textContent = '貼り付けて推測するか、行をタップして範囲指定';
       status.classList.remove('has-split');
-      inputWrap.style.display = 'none';
       lastShownRange = null;
       return;
     }
     if (endIdx === null) {
       status.textContent = '範囲の終了行をタップ（1行だけなら同じ行をもう一度）';
       status.classList.remove('has-split');
-      inputWrap.style.display = 'none';
       lastShownRange = null;
       return;
     }
@@ -2111,26 +2216,58 @@ function openReplace(id) {
     const lineCount = end - start + 1;
     status.textContent = `${lineCount}行を差し替えます`;
     status.classList.add('has-split');
-    inputWrap.style.display = 'block';
 
-    // 範囲が変わったら、現在のテキストで初期化
+    // ユーザーが手で書いてない時だけ、現在の範囲テキストを流し込み
     const rangeKey = `${start}-${end}`;
-    if (lastShownRange !== rangeKey) {
+    if (!userEdited && lastShownRange !== rangeKey) {
       const currentText = lines.slice(start, end + 1).join('\n');
       document.getElementById('replaceText').value = currentText;
       lastShownRange = rangeKey;
     }
   }
 
+  function runGuess() {
+    const pasted = document.getElementById('replaceText').value;
+    if (!pasted.trim()) {
+      toast('先に新しい内容を貼り付けてね');
+      return;
+    }
+    userEdited = true; // 貼り付け内容を保護
+
+    const result = guessRange(lines, pasted);
+    if (result.start === -1 || result.score < 0.3) {
+      updateStatus({ text: 'うまく見つけられなかった…行をタップして手動で選んでね', good: false });
+      return;
+    }
+
+    startIdx = result.start;
+    endIdx = result.end;
+    renderReplaceLines();
+
+    const pct = Math.round(result.score * 100);
+    const lineCount = result.end - result.start + 1;
+    updateStatus({ text: `この範囲かな？（一致度 ${pct}%・${lineCount}行）違ったら行タップで調整してね`, good: true });
+
+    // 推測範囲までスクロール
+    const container = document.getElementById('replaceChunks');
+    const targetEl = container.querySelector(`[data-line="${result.start}"]`);
+    if (targetEl) targetEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
   renderReplaceLines();
   updateStatus();
 
+  document.getElementById('replaceText').addEventListener('input', () => { userEdited = true; });
+
   const root = document.getElementById('modalContent');
   root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="guess"]').addEventListener('click', runGuess);
   root.querySelector('[data-action="clear"]').addEventListener('click', () => {
     startIdx = null;
     endIdx = null;
     lastShownRange = null;
+    userEdited = false;
+    document.getElementById('replaceText').value = '';
     renderReplaceLines();
     updateStatus();
   });
@@ -2205,7 +2342,7 @@ function openSplit(id) {
       <button class="btn btn-ghost" data-action="close">キャンセル</button>
       <button class="btn btn-primary" data-action="execute">分割する</button>
     </div>
-  `);
+  `, true);
 
   const container = document.getElementById('splitChunks');
   function renderSplitChunks() {
