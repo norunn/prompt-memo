@@ -344,6 +344,21 @@ main {
   line-height: 1.8;
 }
 .detail-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
+.detail-action-bar {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  overflow-x: auto;
+  flex-shrink: 0;
+  -webkit-overflow-scrolling: touch;
+}
+.detail-action-bar .action-btn {
+  flex: 0 0 auto;
+  min-width: 64px;
+  white-space: nowrap;
+}
 .action-btn {
   flex: 1;
   min-width: 80px;
@@ -772,6 +787,11 @@ main {
   max-height: none;
   flex: 1;
 }
+/* フルスクリーン時、右下の戻るFABと重ならないよう下部バーに余白 */
+.modal-overlay.fullscreen .modal-footer,
+.modal-overlay.fullscreen .detail-action-bar {
+  padding-right: 82px;
+}
 .guess-btn {
   width: 100%;
   padding: 11px;
@@ -787,6 +807,30 @@ main {
   margin-bottom: 12px;
 }
 .guess-btn:active { background: var(--accent-soft); }
+
+.modal-back-fab {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 26px;
+  background: var(--accent-dark);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 14px rgba(74, 106, 62, 0.4);
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 150;
+  padding-bottom: 3px;
+  font-family: inherit;
+}
+.modal-overlay.active .modal-back-fab { display: flex; }
+.modal-back-fab:active { transform: scale(0.94); background: var(--accent); }
 
 .toast {
   position: fixed;
@@ -829,6 +873,7 @@ main {
 
 <div class="modal-overlay" id="modal">
   <div class="modal" id="modalContent"></div>
+  <button class="modal-back-fab" id="modalBackFab" aria-label="戻る">‹</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -848,6 +893,39 @@ let mergeMode = false;
 let mergeSelected = [];
 let mergeSepKey = 'rule';
 let currentPath = ''; // 現在表示中のフォルダパス（ルートは空文字）
+let modalHistoryActive = false; // モーダル用のhistoryエントリが積まれているか
+
+// ブラウザ/OSの「戻る」でモーダルを閉じる仕組み
+function pushModalHistory() {
+  if (!modalHistoryActive) {
+    history.pushState({ modal: true }, '');
+    modalHistoryActive = true;
+  }
+}
+window.addEventListener('popstate', () => {
+  const overlay = document.getElementById('modal');
+  if (overlay && overlay.classList.contains('active')) {
+    // モーダルが開いてたら閉じるだけ（アプリは閉じない）
+    modalHistoryActive = false;
+    overlay.classList.remove('active');
+    overlay.classList.remove('fullscreen');
+    // 閉じた後もアプリに留まれるよう、ダミー履歴を積み直す
+    history.pushState({ base: true }, '');
+  } else if (currentPath) {
+    // フォルダの中にいる → 親フォルダへ戻る
+    const parts = currentPath.split('/');
+    parts.pop();
+    currentPath = parts.join('/');
+    const search = document.getElementById('search');
+    if (search) search.value = '';
+    render();
+    history.pushState({ base: true }, '');
+  }
+  // ルート & モーダルなし の場合は何もしない → 普通にアプリが閉じる
+});
+
+// 起動時にダミー履歴を1つ積んでおく（最初の戻るでいきなり閉じないように）
+history.pushState({ base: true }, '');
 
 // ---------- ストレージ（環境自動判定） ----------
 // アーティファクト環境では window.storage、本番(GitHub Pages等)では localStorage を使う
@@ -1143,11 +1221,23 @@ function openModal(html, fullscreen) {
   const overlay = document.getElementById('modal');
   overlay.classList.toggle('fullscreen', !!fullscreen);
   overlay.classList.add('active');
+  // 開いたとき中身を一番上にスクロール
+  const body = overlay.querySelector('.modal-body');
+  if (body) body.scrollTop = 0;
+  overlay.querySelector('.modal').scrollTop = 0;
+  pushModalHistory();
 }
 function closeModal() {
   const overlay = document.getElementById('modal');
-  overlay.classList.remove('active');
-  overlay.classList.remove('fullscreen');
+  if (!overlay.classList.contains('active')) return;
+  // ボタンや×で閉じる場合、history.back()を呼ぶとpopstateが発火して実際に閉じる
+  if (modalHistoryActive) {
+    modalHistoryActive = false;
+    history.back();
+  } else {
+    overlay.classList.remove('active');
+    overlay.classList.remove('fullscreen');
+  }
 }
 
 // ---------- 詳細 ----------
@@ -1177,17 +1267,17 @@ function openDetail(id) {
         更新: ${fmtFullDate(p.updatedAt)}
         ${hasHistory ? `<br>履歴: ${p.history.length}版` : ''}
       </div>
-      <div class="detail-actions">
-        <button class="action-btn" data-action="copy">📋 コピー</button>
-        <button class="action-btn" data-action="partialcopy">📑 一部</button>
-        <button class="action-btn" data-action="savefile">💾 保存</button>
-        <button class="action-btn" data-action="edit">✏️ 編集</button>
-        <button class="action-btn" data-action="replace">🔄 差し替え</button>
-        <button class="action-btn" data-action="replacetext">🔁 置換</button>
-        <button class="action-btn" data-action="split">✂️ 分割</button>
-        ${hasHistory ? `<button class="action-btn" data-action="history">📚 履歴</button>` : ''}
-        <button class="action-btn danger" data-action="delete">🗑 削除</button>
-      </div>
+    </div>
+    <div class="detail-action-bar">
+      <button class="action-btn" data-action="copy">📋 コピー</button>
+      <button class="action-btn" data-action="partialcopy">📑 一部</button>
+      <button class="action-btn" data-action="savefile">💾 保存</button>
+      <button class="action-btn" data-action="edit">✏️ 編集</button>
+      <button class="action-btn" data-action="replace">🔄 差し替え</button>
+      <button class="action-btn" data-action="replacetext">🔁 置換</button>
+      <button class="action-btn" data-action="split">✂️ 分割</button>
+      ${hasHistory ? `<button class="action-btn" data-action="history">📚 履歴</button>` : ''}
+      <button class="action-btn danger" data-action="delete">🗑 削除</button>
     </div>
   `, true);
 
@@ -2235,7 +2325,7 @@ function openReplace(id) {
     userEdited = true; // 貼り付け内容を保護
 
     const result = guessRange(lines, pasted);
-    if (result.start === -1 || result.score < 0.3) {
+    if (result.start === -1 || result.score < 0.08) {
       updateStatus({ text: 'うまく見つけられなかった…行をタップして手動で選んでね', good: false });
       return;
     }
@@ -2246,7 +2336,8 @@ function openReplace(id) {
 
     const pct = Math.round(result.score * 100);
     const lineCount = result.end - result.start + 1;
-    updateStatus({ text: `この範囲かな？（一致度 ${pct}%・${lineCount}行）違ったら行タップで調整してね`, good: true });
+    const confidence = result.score >= 0.3 ? 'たぶんここ' : (result.score >= 0.15 ? 'ここかも' : '自信薄めだけどここ');
+    updateStatus({ text: `${confidence}（${lineCount}行）。合ってるか確認して、違ったら行タップで調整してね`, good: result.score >= 0.15 });
 
     // 推測範囲までスクロール
     const container = document.getElementById('replaceChunks');
@@ -2748,6 +2839,7 @@ document.getElementById('fabDownload').addEventListener('click', openDownloadSel
 document.getElementById('mergeToggle').addEventListener('click', toggleMergeMode);
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('menuBtn').addEventListener('click', openMenu);
+document.getElementById('modalBackFab').addEventListener('click', closeModal);
 document.getElementById('modal').addEventListener('click', e => {
   if (e.target.id === 'modal') closeModal();
 });
