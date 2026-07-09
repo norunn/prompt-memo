@@ -350,13 +350,15 @@ main {
   padding: 10px 16px;
   border-top: 1px solid var(--border);
   background: var(--bg);
-  overflow-x: auto;
+  flex-wrap: wrap;
   flex-shrink: 0;
-  -webkit-overflow-scrolling: touch;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
 }
 .detail-action-bar .action-btn {
-  flex: 0 0 auto;
-  min-width: 64px;
+  flex: 1 1 auto;
+  min-width: 72px;
   white-space: nowrap;
 }
 .action-btn {
@@ -787,11 +789,6 @@ main {
   max-height: none;
   flex: 1;
 }
-/* フルスクリーン時、右下の戻るFABと重ならないよう下部バーに余白 */
-.modal-overlay.fullscreen .modal-footer,
-.modal-overlay.fullscreen .detail-action-bar {
-  padding-right: 82px;
-}
 .guess-btn {
   width: 100%;
   padding: 11px;
@@ -807,30 +804,6 @@ main {
   margin-bottom: 12px;
 }
 .guess-btn:active { background: var(--accent-soft); }
-
-.modal-back-fab {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 52px;
-  height: 52px;
-  border-radius: 26px;
-  background: var(--accent-dark);
-  color: white;
-  border: none;
-  box-shadow: 0 4px 14px rgba(74, 106, 62, 0.4);
-  font-size: 30px;
-  line-height: 1;
-  cursor: pointer;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 150;
-  padding-bottom: 3px;
-  font-family: inherit;
-}
-.modal-overlay.active .modal-back-fab { display: flex; }
-.modal-back-fab:active { transform: scale(0.94); background: var(--accent); }
 
 .toast {
   position: fixed;
@@ -873,7 +846,6 @@ main {
 
 <div class="modal-overlay" id="modal">
   <div class="modal" id="modalContent"></div>
-  <button class="modal-back-fab" id="modalBackFab" aria-label="戻る">‹</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -2839,7 +2811,6 @@ document.getElementById('fabDownload').addEventListener('click', openDownloadSel
 document.getElementById('mergeToggle').addEventListener('click', toggleMergeMode);
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('menuBtn').addEventListener('click', openMenu);
-document.getElementById('modalBackFab').addEventListener('click', closeModal);
 document.getElementById('modal').addEventListener('click', e => {
   if (e.target.id === 'modal') closeModal();
 });
