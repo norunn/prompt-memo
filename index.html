@@ -211,6 +211,7 @@ main {
   font-family: inherit;
 }
 .fab-secondary:active { background: var(--accent-soft); }
+.fab-move { bottom: 90px; }
 
 .modal-overlay {
   position: fixed;
@@ -805,6 +806,56 @@ main {
 }
 .guess-btn:active { background: var(--accent-soft); }
 
+.diff-view {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.diff-line {
+  padding: 3px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 1em;
+}
+.diff-line.same { color: var(--text-sub); }
+.diff-line.del {
+  background: #FBEAE7;
+  color: #9C4A40;
+  text-decoration: line-through;
+  text-decoration-color: rgba(156, 74, 64, 0.4);
+}
+.diff-line.add {
+  background: #E8F2E0;
+  color: #3E6032;
+}
+.diff-line.gap {
+  color: var(--text-sub);
+  opacity: 0.6;
+  text-align: center;
+  font-size: 11px;
+  padding: 5px;
+  background: var(--bg-soft);
+}
+.diff-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-sub);
+  margin-bottom: 10px;
+}
+.diff-legend span { display: flex; align-items: center; gap: 4px; }
+.diff-chip {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.diff-chip.del { background: #FBEAE7; border: 1px solid #E0B8B0; }
+.diff-chip.add { background: #E8F2E0; border: 1px solid #BAD3A8; }
+
 .toast {
   position: fixed;
   bottom: 96px;
@@ -843,6 +894,7 @@ main {
 
 <button class="fab" id="fab">＋</button>
 <button class="fab fab-secondary" id="fabDownload" style="display:none;">💾 (0)</button>
+<button class="fab fab-secondary fab-move" id="fabMove" style="display:none;">📁 (0)</button>
 
 <div class="modal-overlay" id="modal">
   <div class="modal" id="modalContent"></div>
@@ -1168,6 +1220,8 @@ function renderPromptCard(p, showFolder) {
     : '';
   const preview = (p.body || '').replace(/\s+/g, ' ').slice(0, 80);
   const histInfo = p.history && p.history.length ? `📚 ${p.history.length}版` : '';
+  const charInfo = `${(p.body || '').length.toLocaleString('ja-JP')}字`;
+  const metaLeft = [histInfo, charInfo].filter(Boolean).join(' · ');
 
   card.innerHTML = `
     ${selectedBadge}
@@ -1176,7 +1230,7 @@ function renderPromptCard(p, showFolder) {
     ${tagsHtml}
     <div class="prompt-preview">${escapeHtml(preview)}</div>
     <div class="prompt-meta">
-      <span>${histInfo}</span>
+      <span>${metaLeft}</span>
       <span>${fmtDate(p.updatedAt)}</span>
     </div>`;
 
@@ -1235,6 +1289,7 @@ function openDetail(id) {
       ${tagsHtml}
       <div class="detail-body">${escapeHtml(p.body)}</div>
       <div class="detail-meta">
+        ${(p.body || '').length.toLocaleString('ja-JP')}字・${(p.body || '').split('\n').length}行<br>
         作成: ${fmtFullDate(p.createdAt)}<br>
         更新: ${fmtFullDate(p.updatedAt)}
         ${hasHistory ? `<br>履歴: ${p.history.length}版` : ''}
@@ -1417,17 +1472,136 @@ function openHistory(id) {
         <div class="history-item">
           <div class="history-date">${fmtFullDate(h.savedAt)} の版</div>
           <div class="history-preview">${escapeHtml(h.body || '(本文なし)')}</div>
-          <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px;" data-restore="${i}">この版に戻す</button>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px;" data-diff="${i}">🔍 差分</button>
+            <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px;" data-restore="${i}">この版に戻す</button>
+          </div>
         </div>
       `).join('')}
     </div>
-  `);
+  `, true);
 
   const root = document.getElementById('modalContent');
   root.querySelector('[data-action="close"]').addEventListener('click', closeModal);
   root.querySelectorAll('[data-restore]').forEach(b => {
     b.addEventListener('click', () => restoreHistory(id, parseInt(b.dataset.restore, 10)));
   });
+  root.querySelectorAll('[data-diff]').forEach(b => {
+    b.addEventListener('click', () => openDiff(id, parseInt(b.dataset.diff, 10)));
+  });
+}
+
+// ---------- 差分表示 ----------
+// LCSベースの行diff
+function diffLines(oldLines, newLines) {
+  const m = oldLines.length, n = newLines.length;
+  // 巨大テキストはメモリ保護のため単純化
+  if (m * n > 400000) {
+    return [
+      ...oldLines.map(l => ({ type: 'del', text: l })),
+      ...newLines.map(l => ({ type: 'add', text: l }))
+    ];
+  }
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      dp[i][j] = oldLines[i] === newLines[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const result = [];
+  let i = 0, j = 0;
+  while (i < m && j < n) {
+    if (oldLines[i] === newLines[j]) {
+      result.push({ type: 'same', text: oldLines[i] });
+      i++; j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      result.push({ type: 'del', text: oldLines[i] });
+      i++;
+    } else {
+      result.push({ type: 'add', text: newLines[j] });
+      j++;
+    }
+  }
+  while (i < m) result.push({ type: 'del', text: oldLines[i++] });
+  while (j < n) result.push({ type: 'add', text: newLines[j++] });
+  return result;
+}
+
+// 連続する same 行を折りたたむ（変更の前後 context 行だけ残す）
+function collapseDiff(diff, context) {
+  const keep = new Array(diff.length).fill(false);
+  diff.forEach((d, idx) => {
+    if (d.type !== 'same') {
+      for (let k = Math.max(0, idx - context); k <= Math.min(diff.length - 1, idx + context); k++) {
+        keep[k] = true;
+      }
+    }
+  });
+  const out = [];
+  let hiddenCount = 0;
+  diff.forEach((d, idx) => {
+    if (keep[idx]) {
+      if (hiddenCount > 0) {
+        out.push({ type: 'gap', count: hiddenCount });
+        hiddenCount = 0;
+      }
+      out.push(d);
+    } else {
+      hiddenCount++;
+    }
+  });
+  if (hiddenCount > 0) out.push({ type: 'gap', count: hiddenCount });
+  return out;
+}
+
+function openDiff(id, histIdx) {
+  const p = prompts.find(x => x.id === id);
+  if (!p || !p.history || !p.history[histIdx]) return;
+  const h = p.history[histIdx];
+
+  const oldLines = (h.body || '').split('\n');
+  const newLines = (p.body || '').split('\n');
+  const diff = diffLines(oldLines, newLines);
+
+  const changeCount = diff.filter(d => d.type !== 'same').length;
+  const collapsed = collapseDiff(diff, 2);
+
+  const diffHtml = changeCount === 0
+    ? '<div class="diff-line gap">本文の変更はありません（タイトル・タグ・フォルダの変更かも）</div>'
+    : collapsed.map(d => {
+        if (d.type === 'gap') {
+          return `<div class="diff-line gap">… ${d.count}行 変更なし …</div>`;
+        }
+        const text = d.text.trim() === '' ? ' ' : escapeHtml(d.text);
+        return `<div class="diff-line ${d.type}">${text}</div>`;
+      }).join('');
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">🔍 差分</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-sub);margin-bottom:10px;line-height:1.6;">
+        ${fmtFullDate(h.savedAt)} の版 → 現在
+      </div>
+      <div class="diff-legend">
+        <span><span class="diff-chip del"></span>消えた・変わる前</span>
+        <span><span class="diff-chip add"></span>今の内容</span>
+      </div>
+      <div class="diff-view">${diffHtml}</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">閉じる</button>
+      <button class="btn btn-secondary" data-action="back">履歴に戻る</button>
+    </div>
+  `, true);
+
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelector('[data-action="back"]').addEventListener('click', () => openHistory(id));
 }
 
 async function restoreHistory(id, idx) {
@@ -1466,15 +1640,19 @@ function toggleMergeMode() {
 
   const fab = document.getElementById('fab');
   const fabDl = document.getElementById('fabDownload');
+  const fabMv = document.getElementById('fabMove');
   if (mergeMode) {
     fab.classList.add('merge-fab');
     fab.textContent = '合体する (0)';
     fabDl.style.display = 'flex';
     fabDl.textContent = '💾 (0)';
+    fabMv.style.display = 'flex';
+    fabMv.textContent = '📁 (0)';
   } else {
     fab.classList.remove('merge-fab');
     fab.textContent = '＋';
     fabDl.style.display = 'none';
+    fabMv.style.display = 'none';
   }
   render();
 }
@@ -1485,6 +1663,7 @@ function toggleMergeSelect(id) {
   else mergeSelected.push(id);
   document.getElementById('fab').textContent = `合体する (${mergeSelected.length})`;
   document.getElementById('fabDownload').textContent = `💾 (${mergeSelected.length})`;
+  document.getElementById('fabMove').textContent = `📁 (${mergeSelected.length})`;
   render();
 }
 
@@ -2802,12 +2981,98 @@ function openImportConfirm(data) {
   });
 }
 
+// ---------- フォルダ移動 ----------
+function getAllFolders() {
+  const set = new Set();
+  prompts.forEach(p => {
+    const f = p.folder || '';
+    if (!f) return;
+    // 中間パスも全部拾う（ルルイエ/キャラ なら ルルイエ も）
+    const parts = f.split('/');
+    let path = '';
+    parts.forEach(part => {
+      path = path ? `${path}/${part}` : part;
+      set.add(path);
+    });
+  });
+  return [...set].sort((a, b) => a.localeCompare(b, 'ja'));
+}
+
+function openMoveDialog() {
+  if (mergeSelected.length === 0) {
+    toast('プロンプトを選んでね');
+    return;
+  }
+
+  const folders = getAllFolders();
+  const folderButtons = [
+    `<button class="menu-item" data-move-to="">
+      <div class="menu-item-title">🏠 ホーム</div>
+    </button>`,
+    ...folders.map(f => `
+      <button class="menu-item" data-move-to="${escapeHtml(f)}">
+        <div class="menu-item-title">📁 ${escapeHtml(f)}</div>
+      </button>`)
+  ].join('');
+
+  openModal(`
+    <div class="modal-header">
+      <div class="modal-title">📁 ${mergeSelected.length}件を移動</div>
+      <button class="modal-close" data-action="close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field">
+        <label class="form-label">新しいフォルダに移動（／で階層）</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" class="form-input" id="moveNewFolder" placeholder="例: ルルイエ/サブキャラ" style="flex:1;">
+          <button class="btn btn-primary" data-action="moveNew" style="flex-shrink:0;">移動</button>
+        </div>
+      </div>
+      <label class="form-label">既存のフォルダに移動（タップで即移動）</label>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${folderButtons}
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-action="close">キャンセル</button>
+    </div>
+  `, true);
+
+  const root = document.getElementById('modalContent');
+  root.querySelectorAll('[data-action="close"]').forEach(b => b.addEventListener('click', closeModal));
+  root.querySelectorAll('[data-move-to]').forEach(b => {
+    b.addEventListener('click', () => performMove(b.dataset.moveTo));
+  });
+  root.querySelector('[data-action="moveNew"]').addEventListener('click', () => {
+    const raw = document.getElementById('moveNewFolder').value;
+    const folder = normalizeFolder(raw);
+    performMove(folder);
+  });
+}
+
+async function performMove(folder) {
+  const selected = mergeSelected.map(id => prompts.find(p => p.id === id)).filter(Boolean);
+  if (selected.length === 0) return;
+
+  selected.forEach(p => {
+    p.folder = folder;
+    p.updatedAt = Date.now();
+  });
+
+  await savePrompts();
+  const count = selected.length;
+  closeModal();
+  toggleMergeMode(); // 選択解除
+  toast(`${count}件を「${folder || 'ホーム'}」に移動しました`);
+}
+
 // ---------- 初期化 ----------
 document.getElementById('fab').addEventListener('click', () => {
   if (mergeMode) openMerge();
   else openEdit();
 });
 document.getElementById('fabDownload').addEventListener('click', openDownloadSelected);
+document.getElementById('fabMove').addEventListener('click', openMoveDialog);
 document.getElementById('mergeToggle').addEventListener('click', toggleMergeMode);
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('menuBtn').addEventListener('click', openMenu);
