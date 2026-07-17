@@ -856,6 +856,72 @@ main {
 .diff-chip.del { background: #FBEAE7; border: 1px solid #E0B8B0; }
 .diff-chip.add { background: #E8F2E0; border: 1px solid #BAD3A8; }
 
+.pin-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-left: auto;
+  opacity: 0.35;
+  transition: opacity 0.15s, background 0.15s;
+  filter: grayscale(1);
+}
+.pin-btn.pinned {
+  opacity: 1;
+  filter: none;
+}
+.pin-btn:active { background: var(--accent-soft); }
+
+.pinned-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.pinned-card {
+  background: var(--card);
+  border: 1.5px solid var(--accent-soft);
+  border-radius: 10px;
+  padding: 11px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: transform 0.15s;
+  box-shadow: var(--shadow);
+}
+.pinned-card:active { transform: scale(0.985); }
+.pinned-name {
+  font-family: 'Klee One', cursive;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--accent-dark);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pinned-count {
+  font-size: 11px;
+  color: var(--text-sub);
+  flex-shrink: 0;
+}
+
+.prompt-time {
+  font-size: 12.5px;
+}
+.prompt-time.recent {
+  color: var(--accent);
+  font-weight: 600;
+}
+.prompt-time.very-recent {
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
 .toast {
   position: fixed;
   bottom: 96px;
@@ -917,6 +983,7 @@ let mergeMode = false;
 let mergeSelected = [];
 let mergeSepKey = 'rule';
 let currentPath = ''; // 現在表示中のフォルダパス（ルートは空文字）
+let pinnedFolders = []; // ピン留めされたフォルダパスの配列
 let modalHistoryActive = false; // モーダル用のhistoryエントリが積まれているか
 
 // ブラウザ/OSの「戻る」でモーダルを閉じる仕組み
@@ -989,6 +1056,19 @@ async function loadPrompts() {
   } catch (e) {
     prompts = [];
   }
+  try {
+    const pv = await storage.get('pinned_folders_v1');
+    if (pv) pinnedFolders = JSON.parse(pv);
+  } catch (e) {
+    pinnedFolders = [];
+  }
+}
+async function savePinned() {
+  try {
+    await storage.set('pinned_folders_v1', JSON.stringify(pinnedFolders));
+  } catch (e) {
+    console.error('ピン保存失敗', e);
+  }
 }
 async function savePrompts() {
   try {
@@ -1022,6 +1102,24 @@ function fmtDate(ts) {
 function fmtFullDate(ts) {
   const d = new Date(ts);
   return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function fmtRelative(ts) {
+  const diff = Date.now() - ts;
+  const min = 60 * 1000, hour = 60 * min, day = 24 * hour;
+  if (diff < 2 * min) return 'たった今';
+  if (diff < hour) return `${Math.floor(diff / min)}分前`;
+  if (diff < day) return `${Math.floor(diff / hour)}時間前`;
+  if (diff < 2 * day) return '昨日';
+  if (diff < 7 * day) return `${Math.floor(diff / day)}日前`;
+  if (diff < 30 * day) return `${Math.floor(diff / (7 * day))}週間前`;
+  if (diff < 365 * day) return `${Math.floor(diff / (30 * day))}ヶ月前`;
+  return `${Math.floor(diff / (365 * day))}年前`;
+}
+function recencyClass(ts) {
+  const diff = Date.now() - ts;
+  if (diff < 5 * 60 * 1000) return 'very-recent';
+  if (diff < 24 * 60 * 60 * 1000) return 'recent';
+  return '';
 }
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -1067,6 +1165,32 @@ function render() {
   // 通常モード：currentPath のサブフォルダ + プロンプト
   const bc = renderBreadcrumb(false);
   if (bc) list.appendChild(bc);
+
+  // ホームではピン留めフォルダを最上部に表示
+  if (!currentPath && pinnedFolders.length > 0) {
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = '📌 ピン留め';
+    list.appendChild(label);
+
+    const section = document.createElement('div');
+    section.className = 'pinned-section';
+    pinnedFolders.forEach(path => {
+      const count = prompts.filter(p => {
+        const f = p.folder || '';
+        return f === path || f.startsWith(path + '/');
+      }).length;
+      const card = document.createElement('div');
+      card.className = 'pinned-card';
+      card.innerHTML = `
+        <span>📌</span>
+        <span class="pinned-name">${escapeHtml(path)}</span>
+        <span class="pinned-count">${count}件</span>`;
+      card.addEventListener('click', () => navigateTo(path));
+      section.appendChild(card);
+    });
+    list.appendChild(section);
+  }
 
   const subFolders = getSubFolders(currentPath);
   const directPrompts = prompts
@@ -1158,7 +1282,31 @@ function renderBreadcrumb(isSearch) {
     }
     bc.appendChild(btn);
   });
+
+  // 現在のフォルダをピン留めするボタン
+  const isPinned = pinnedFolders.includes(currentPath);
+  const pinBtn = document.createElement('button');
+  pinBtn.className = 'pin-btn' + (isPinned ? ' pinned' : '');
+  pinBtn.textContent = '📌';
+  pinBtn.title = isPinned ? 'ピン解除' : 'ピン留め';
+  pinBtn.addEventListener('click', () => togglePin(currentPath));
+  bc.appendChild(pinBtn);
+
   return bc;
+}
+
+async function togglePin(path) {
+  if (!path) return;
+  const idx = pinnedFolders.indexOf(path);
+  if (idx >= 0) {
+    pinnedFolders.splice(idx, 1);
+    toast('ピンを外しました');
+  } else {
+    pinnedFolders.push(path);
+    toast('ピン留めしました');
+  }
+  await savePinned();
+  render();
 }
 
 function getSubFolders(path) {
@@ -1231,7 +1379,7 @@ function renderPromptCard(p, showFolder) {
     <div class="prompt-preview">${escapeHtml(preview)}</div>
     <div class="prompt-meta">
       <span>${metaLeft}</span>
-      <span>${fmtDate(p.updatedAt)}</span>
+      <span class="prompt-time ${recencyClass(p.updatedAt)}">${fmtRelative(p.updatedAt)}</span>
     </div>`;
 
   card.addEventListener('click', () => {
@@ -1291,7 +1439,7 @@ function openDetail(id) {
       <div class="detail-meta">
         ${(p.body || '').length.toLocaleString('ja-JP')}字・${(p.body || '').split('\n').length}行<br>
         作成: ${fmtFullDate(p.createdAt)}<br>
-        更新: ${fmtFullDate(p.updatedAt)}
+        更新: ${fmtFullDate(p.updatedAt)}（${fmtRelative(p.updatedAt)}）
         ${hasHistory ? `<br>履歴: ${p.history.length}版` : ''}
       </div>
     </div>
